@@ -421,7 +421,7 @@
               <div class="register-block">
                 <div class="register-section-head">
                   <h3>注册资源</h3>
-                  <span class="register-section-meta">代理与打码，保存在本机</span>
+                  <span class="register-section-meta">代理与打码</span>
                 </div>
                 <div class="register-params-grid">
                     <label class="field span-2">
@@ -435,7 +435,7 @@
               <div class="register-run-params">
                 <div class="register-section-head">
                   <h3>运行参数</h3>
-                  <span class="register-section-meta">数量、并发、产出格式</span>
+                  <span class="register-section-meta">本批设置</span>
                 </div>
                 <div class="register-params-grid">
                   <label class="field"><span>注册数量</span><input type="number" id="count" value="1" min="1" max="20" /></label>
@@ -445,7 +445,7 @@
                   <label class="field"><span>国家代码</span><input type="text" id="country" value="US" /></label>
                   <label class="field"><span>邮箱前缀（留空随机）</span><input type="text" id="prefix" placeholder="随机" /></label>
                   <label class="field span-2"><span>产出格式</span><select id="tokenMode"></select></label>
-                  <label class="field span-2"><span>批次名称（可选）</span><input type="text" id="batchLabel" placeholder="留空自动生成，如 0815-US-outlook-10x-G6" autocomplete="off" /></label>
+                  <label class="field span-2"><span>批次名称</span><input type="text" id="batchLabel" placeholder="留空则自动生成" autocomplete="off" /></label>
                 </div>
                 <label class="register-mode-toggle"><span>仅注册不登录</span><input type="checkbox" id="skipLogin" /></label>
                 <p class="register-inline-hint">单次最多注册 20 个账号。</p>
@@ -1041,8 +1041,8 @@ async function loadConfig(){
     $('tokenMode').onchange = function(){};
     $('domain').innerHTML = c.domains.map(d=>`<option>${d}</option>`).join('');
     $('country').value = c.default_country||'US';
-    $('proxy').placeholder = 'host:port:user:pass-US-{sid}';
-    $('captchaKey').placeholder = 'captcha.run Bearer key';
+    $('proxy').placeholder = '备用代理，例如 host:port:user:pass';
+    $('captchaKey').placeholder = 'captcha.run Key';
     const savedProxy = localStorage.getItem('outlook_reg_proxy');
     const savedKey = localStorage.getItem('outlook_reg_captcha_key');
     $('proxy').value = savedProxy || DEFAULT_PROXY;
