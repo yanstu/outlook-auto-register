@@ -9,6 +9,7 @@ from typing import Any, Optional
 
 from . import database as db
 from .account_persist import enrich_register_result, merge_account_row
+from .lifecycle import INCUBATING_TAG, enrich_lifecycle_fields
 from .models import RegisterResult
 
 logger = logging.getLogger(__name__)
@@ -210,10 +211,26 @@ def save_register_result(
         conn = db.connect()
         try:
             upsert_account_dict(conn, row)
+            # 新号默认打 incubating 标签（时长由 OUTLOOK_INCUBATION_HOURS 决定）
+            meta_row = conn.execute(
+                "SELECT tags_json FROM account_meta WHERE email=? COLLATE NOCASE",
+                (result.email,),
+            ).fetchone()
+            tags: list[Any] = []
+            if meta_row and meta_row["tags_json"]:
+                try:
+                    tags = json.loads(meta_row["tags_json"] or "[]")
+                except Exception:  # noqa: BLE001
+                    tags = []
+            if not isinstance(tags, list):
+                tags = []
+            if INCUBATING_TAG not in tags:
+                tags.append(INCUBATING_TAG)
+            upsert_meta_dict(conn, result.email, {"tags": tags, "updated_at": now})
             conn.commit()
         finally:
             conn.close()
-    logger.info("账号已写入 SQLite: %s", result.email)
+    logger.info("账号已写入 SQLite: %s（incubating）", result.email)
     return f"sqlite:{result.email}"
 
 
@@ -240,6 +257,10 @@ def get_account(email: str) -> Optional[dict[str, Any]]:
                     acc["verify"] = None
             if not acc.get("combo_dual") and meta["combo_dual_meta"]:
                 acc["combo_dual"] = meta["combo_dual_meta"]
+        else:
+            acc.setdefault("tags", [])
+            acc.setdefault("note", "")
+        enrich_lifecycle_fields(acc)
         return acc
     finally:
         conn.close()
@@ -501,6 +522,7 @@ def list_accounts() -> list[dict[str, Any]]:
                     row.get("client_id", ""),
                     row.get("refresh_token", ""),
                 ])
+            enrich_lifecycle_fields(row)
         accounts.sort(
             key=lambda x: (
                 1 if (x.get("verify") or {}).get("ok") or (x.get("verify") or {}).get("graph") else 0,

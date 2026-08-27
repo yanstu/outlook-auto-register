@@ -6,11 +6,12 @@
   绝不修改核心协议流程文件（另一个 worker 正在改引擎）。
 - 注册是阻塞式网络任务：放后台线程 + 线程池并发执行，通过 SSE 实时推进度。
 - 邮件令牌模式 graph/outlook_rest/imap/dual（由引擎 _MAIL_SCOPE_BY_MODE 决定实际可用）；
-  默认 graph 走 Graph API 读信，绕开新号 IMAP 开关限制。
+  默认 graph_recovery（Graph 六段式含恢复邮箱）；省略 token_mode 时 API/UI 均用此默认。
 - 批量注册走引擎 register_batch_iter（生成器驱动 SSE，引擎内部已 save_account），
   import 失败时线程池兜底。
 - 保活接 scripts.keepalive.keepalive_one（refresh→access→GET /me+列信→轮换回写）；
   「开启 IMAP」仍为占位，如实反馈，绝不假装成功。
+- 新号孵化期（OUTLOOK_INCUBATION_HOURS，默认 48h）内批量测活跳过，不打微软接口。
 
 启动：
   cd outlook-api-register
@@ -46,6 +47,7 @@ from pydantic import BaseModel
 from outlook_api_reg.account_persist import merge_account_row
 from outlook_api_reg import account_store
 from outlook_api_reg import database as app_db
+from outlook_api_reg import lifecycle
 from outlook_api_reg.register import register_one, save_account
 from outlook_api_reg.models import RegisterResult
 from outlook_api_reg import mail_reader
@@ -100,10 +102,14 @@ _ENGINE_MODES = list(_scope_map.keys()) or [
     "outlook_rest",
     "imap",
 ]
-DEFAULT_TOKEN_MODE = getattr(reg_constants, "MAIL_TOKEN_MODE", "graph")
+DEFAULT_TOKEN_MODE = "graph_recovery"
+# 引擎环境变量仍可覆盖 OAuth scope；页面/注册 API 省略 token_mode 时固定为 graph_recovery
+_ENV_TOKEN_MODE = getattr(reg_constants, "MAIL_TOKEN_MODE", "graph")
 DUAL_READY = "dual" in _scope_map
-# 引擎高级模式仍暴露给 API；页面「产出格式」只用 graph / login_exe
+# 引擎高级模式仍暴露给 API；页面「产出格式」只用 graph / graph_recovery
 TOKEN_MODES = _ENGINE_MODES + (["dual"] if "dual" not in _ENGINE_MODES else [])
+if "graph_recovery" not in TOKEN_MODES:
+    TOKEN_MODES = list(TOKEN_MODES) + ["graph_recovery"]
 PRODUCT_MODES = [
     {
         "id": "graph",
@@ -1141,13 +1147,8 @@ def get_config() -> JSONResponse:
     recovery_pool_configured = ext_recovery_pool.external_pool_enabled()
     recovery_configured = cf_active or coolhs_active or recovery_pool_configured
     recovery_backend = cf_domain_mail.recovery_backend()
-    env_mode = DEFAULT_TOKEN_MODE
-    if env_mode in ("login_exe", "recovery"):
-        default_product = "graph_recovery"
-    elif cf_active or coolhs_active or env_mode == "graph":
-        default_product = "graph_recovery"
-    else:
-        default_product = "graph"
+    env_mode = _ENV_TOKEN_MODE
+    default_product = DEFAULT_TOKEN_MODE  # 固定 graph_recovery
     return JSONResponse(
         {
             "proxy": proxy,
@@ -1167,6 +1168,8 @@ def get_config() -> JSONResponse:
             "product_modes": PRODUCT_MODES,
             "default_token_mode": default_product,
             "mail_token_mode_env": env_mode,
+            "incubation_hours": lifecycle.incubation_hours(),
+            "default_export_format": "recovery",
             "dual_ready": DUAL_READY,
             "batch_ready": BATCH_READY,
             "keepalive_ready": KEEPALIVE_READY,
@@ -1464,6 +1467,29 @@ def export_accounts_all() -> PlainTextResponse:
     return PlainTextResponse(body, headers={"Content-Disposition": "attachment; filename=accounts_combo.txt"})
 
 
+@app.get("/api/export/long-lived")
+def export_long_lived(min_days: float = Query(7.0, ge=0.0)) -> PlainTextResponse:
+    """导出存活满 min_days 天、非孵化、含 recovery 的六段 combo。"""
+    rows = _load_accounts()
+    lines: list[str] = []
+    for r in rows:
+        if not lifecycle.is_long_lived(r, min_days=min_days):
+            continue
+        line = lifecycle.combo_recovery_line(r)
+        if line:
+            lines.append(line)
+    body = "\n".join(lines) + ("\n" if lines else "")
+    return PlainTextResponse(
+        body,
+        headers={
+            "Content-Disposition": "attachment; filename=long_lived.txt",
+            "X-Export-Total": str(len(lines)),
+            "X-Export-Min-Days": str(min_days),
+            "Access-Control-Expose-Headers": "X-Export-Total,X-Export-Min-Days",
+        },
+    )
+
+
 @app.post("/api/accounts/export")
 def export_accounts(req: ExportRequest) -> PlainTextResponse:
     fmt = req.format if req.format in EXPORT_FORMATS else "graph"
@@ -1719,6 +1745,7 @@ def verify_combo(req: VerifyComboRequest) -> JSONResponse:
 def verify_batch(req: VerifyBatchRequest) -> JSONResponse:
     proxy_url = _proxy_url(req.proxy)
     tasks: list[tuple[str, str]] = []  # (email, refresh_token)
+    skipped: list[dict[str, Any]] = []
     if req.combos:
         for c in req.combos:
             e, _p, _c, rt = _split_combo(c)
@@ -1726,19 +1753,33 @@ def verify_batch(req: VerifyBatchRequest) -> JSONResponse:
                 tasks.append((e, rt))
     else:
         rows = _load_accounts()
+        by_email = {r["email"]: r for r in rows}
         want = set(req.emails) if req.emails else None
         for r in rows:
             if want is not None and r["email"] not in want:
                 continue
             if not r.get("refresh_token"):
                 continue
+            if r.get("incubating") or lifecycle.is_incubating(r.get("created_at")):
+                skipped.append({
+                    "email": r["email"],
+                    "ok": False,
+                    "skipped": True,
+                    "incubating": True,
+                    "incubation_until": r.get("incubation_until") or "",
+                    "usable": [],
+                    "summary": "孵化期跳过（不调用微软接口）",
+                    "message": "incubating",
+                })
+                continue
             tasks.append((r["email"], r["refresh_token"]))
+        del by_email
 
-    if not tasks:
+    if not tasks and not skipped:
         return JSONResponse({"ok": True, "results": [], "message": "无可校验账号（缺 refresh_token）。"})
 
-    conc = max(1, min(int(req.concurrency or 4), 8, len(tasks)))
-    results: list[dict[str, Any]] = []
+    conc = max(1, min(int(req.concurrency or 4), 8, len(tasks) or 1))
+    results: list[dict[str, Any]] = list(skipped)
 
     def work(item: tuple[str, str]) -> dict[str, Any]:
         try:
@@ -1762,12 +1803,20 @@ def verify_batch(req: VerifyBatchRequest) -> JSONResponse:
             _cache_verify(r)
         return r
 
-    with ThreadPoolExecutor(max_workers=conc) as ex:
-        for f in as_completed([ex.submit(work, t) for t in tasks]):
-            results.append(f.result())
+    if tasks:
+        with ThreadPoolExecutor(max_workers=conc) as ex:
+            for f in as_completed([ex.submit(work, t) for t in tasks]):
+                results.append(f.result())
 
     ok_n = sum(1 for r in results if r.get("ok"))
-    return JSONResponse({"ok": True, "total": len(results), "usable": ok_n, "results": results})
+    skip_n = sum(1 for r in results if r.get("skipped"))
+    return JSONResponse({
+        "ok": True,
+        "total": len(results),
+        "usable": ok_n,
+        "skipped": skip_n,
+        "results": results,
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -1967,19 +2016,29 @@ def keepalive(req: KeepaliveRequest) -> JSONResponse:
     rows = _load_accounts()
     want = set(req.emails) if req.emails else None
     tasks: list[tuple[str, str]] = []  # (email, combo_line)
+    skipped: list[dict[str, Any]] = []
     for r in rows:
         if want is not None and r["email"] not in want:
+            continue
+        if r.get("incubating") or lifecycle.is_incubating(r.get("created_at")):
+            skipped.append({
+                "email": r["email"],
+                "ok": False,
+                "skipped": True,
+                "incubating": True,
+                "detail": "孵化期跳过",
+            })
             continue
         line = r.get("combo_dual") or r.get("combo") or ""
         if not line or not r.get("has_token"):
             continue
         tasks.append((r["email"], line))
-    if not tasks:
+    if not tasks and not skipped:
         return JSONResponse({"ok": True, "implemented": True, "results": [],
                              "message": "无可保活账号（缺 refresh_token）。"})
 
-    conc = max(1, min(int(req.concurrency or 5), 5, len(tasks)))
-    results: list[dict[str, Any]] = []
+    conc = max(1, min(int(req.concurrency or 5), 5, len(tasks) or 1))
+    results: list[dict[str, Any]] = list(skipped)
 
     def work(item: tuple[str, str]) -> dict[str, Any]:
         email, line = item
@@ -1990,9 +2049,10 @@ def keepalive(req: KeepaliveRequest) -> JSONResponse:
         res.setdefault("email", email)
         return res
 
-    with ThreadPoolExecutor(max_workers=conc) as ex:
-        for f in as_completed([ex.submit(work, t) for t in tasks]):
-            results.append(f.result())
+    if tasks:
+        with ThreadPoolExecutor(max_workers=conc) as ex:
+            for f in as_completed([ex.submit(work, t) for t in tasks]):
+                results.append(f.result())
 
     # 回写轮换后的新 refresh_token（仅在真的轮换时写盘）
     with _save_lock:
@@ -2001,7 +2061,7 @@ def keepalive(req: KeepaliveRequest) -> JSONResponse:
                 _writeback_keepalive(r.get("email", ""), r["new_line"])
     # 缓存保活结果到 meta（作为测活状态）
     for r in results:
-        if r.get("skip"):
+        if r.get("skip") or r.get("skipped"):
             continue
         email = r.get("email")
         if not email:
@@ -2021,16 +2081,18 @@ def keepalive(req: KeepaliveRequest) -> JSONResponse:
 
     ok_n = sum(1 for r in results if r.get("ok"))
     rot_n = sum(1 for r in results if r.get("rotated"))
+    skip_n = sum(1 for r in results if r.get("skipped") or r.get("skip"))
     return JSONResponse({
         "ok": True, "implemented": True, "total": len(results),
-        "alive": ok_n, "rotated": rot_n,
+        "alive": ok_n, "rotated": rot_n, "skipped": skip_n,
         "results": [{
             "email": r.get("email"),
             "ok": bool(r.get("ok")),
             "profile": r.get("profile"),
             "message": r.get("message"),
             "rotated": bool(r.get("rotated")),
-            "skip": bool(r.get("skip")),
+            "skip": bool(r.get("skip") or r.get("skipped")),
+            "skipped": bool(r.get("skipped") or r.get("skip")),
             "detail": r.get("detail", ""),
         } for r in results],
     })

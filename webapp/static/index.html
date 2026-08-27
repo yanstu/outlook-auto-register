@@ -1023,7 +1023,7 @@ async function loadConfig(){
       {id:'graph', label:'Graph 四段式', export:'graph', hint:''},
       {id:'graph_recovery', label:'Graph 六段式（推荐）', export:'recovery', hint:''}
     ];
-    const defMode = c.default_token_mode || 'graph';
+    const defMode = c.default_token_mode || 'graph_recovery';
     $('tokenMode').innerHTML = products.map(m=>{
       const id = m.id || m;
       const label = m.label || id;
@@ -1045,7 +1045,7 @@ async function loadConfig(){
     $('cfgHint').textContent = '已预填 Key；注册默认走代理池，备用代理可留空（池内无条目时必填）';
     const fmtLabel={graph:'4 段式(Graph 读信)',dual:'6 段式(双令牌 SSO，两枚 refresh)',recovery:'6 段式(含恢复邮箱)'};
     $('exportFmt').innerHTML = (c.export_formats||['graph']).map(f=>`<option value="${f}">${fmtLabel[f]||f}</option>`).join('');
-    $('exportFmt').value='graph';
+    $('exportFmt').value = c.default_export_format || 'recovery';
     $('footEngine').textContent = `批量:${c.batch_ready?'引擎':'线程池'} · dual:${c.dual_ready?'就绪':'未就绪'} · 代理池:${(c.proxy_pool&&c.proxy_pool.enabled)||0}`;
     const savedUsePool = localStorage.getItem('outlook_use_proxy_pool');
     if($('useProxyPool')) $('useProxyPool').checked = savedUsePool==='0' ? false : true;
