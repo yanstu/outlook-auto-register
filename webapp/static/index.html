@@ -373,7 +373,7 @@
   <aside class="sb">
     <div class="sb-brand">
       <div class="sb-logo">OA</div>
-      <div class="sb-name">Outlook 控制台<small>纯 API 注册 · 后台</small></div>
+      <div class="sb-name">Outlook 控制台<small>注册 · 测活 · 保活</small></div>
     </div>
     <div class="sb-group">
       <div class="sb-title">工作台</div>
@@ -383,11 +383,11 @@
       <button class="nav" data-sec="proxy-stats"><span class="ic">◔</span> 代理统计</button>
       <button class="nav" data-sec="pool"><span class="ic">▦</span> 账号池 <span class="count" id="navPoolCount">0</span></button>
       <button class="nav" data-sec="verify"><span class="ic">◈</span> 测活</button>
-      <button class="nav" data-sec="ops"><span class="ic">◐</span> IMAP / 保活</button>
+      <button class="nav" data-sec="ops"><span class="ic">◐</span> 保活</button>
     </div>
     <div class="sb-foot">
       <div><span class="dot off" id="footDot"></span><span id="footHealth">检测中…</span></div>
-      <div id="footEngine" style="color:var(--fg-4);">引擎能力检测中</div>
+      <div id="footEngine" style="color:var(--fg-4);">加载中…</div>
     </div>
   </aside>
 
@@ -426,8 +426,8 @@
                 <div class="register-params-grid">
                     <label class="field span-2">
                     <span>代理</span>
-                    <label class="switch" style="margin-bottom:8px;"><input type="checkbox" id="useProxyPool" checked /> 使用代理池（SQLite，注册/重登按号分配）</label>
-                    <input type="text" id="proxy" placeholder="备用代理 host:port:user:pass-US-{sid}（保存时自动写入数据库）" autocomplete="off" />
+                    <label class="switch" style="margin-bottom:8px;"><input type="checkbox" id="useProxyPool" checked /> 使用代理池（按账号分配）</label>
+                    <input type="text" id="proxy" placeholder="备用代理，例如 host:port:user:pass" autocomplete="off" />
                   </label>
                   <label class="field span-2"><span>captcha.run Key</span><input type="password" id="captchaKey" placeholder="captcha.run Bearer key" autocomplete="off" spellcheck="false" /></label>
                 </div>
@@ -440,7 +440,7 @@
                 <div class="register-params-grid">
                   <label class="field"><span>注册数量</span><input type="number" id="count" value="1" min="1" max="20" /></label>
                   <label class="field"><span>并发度</span><input type="number" id="concurrency" value="1" min="1" max="20" /></label>
-                  <label class="field"><span>PX 模式</span><select id="pxMode"></select></label>
+                  <label class="field"><span>人机验证</span><select id="pxMode"></select></label>
                   <label class="field"><span>邮箱后缀</span><select id="domain"></select></label>
                   <label class="field"><span>国家代码</span><input type="text" id="country" value="US" /></label>
                   <label class="field"><span>邮箱前缀（留空随机）</span><input type="text" id="prefix" placeholder="随机" /></label>
@@ -448,7 +448,7 @@
                   <label class="field span-2"><span>批次名称（可选）</span><input type="text" id="batchLabel" placeholder="留空自动生成，如 0815-US-outlook-10x-G6" autocomplete="off" /></label>
                 </div>
                 <label class="register-mode-toggle"><span>仅注册不登录</span><input type="checkbox" id="skipLogin" /></label>
-                <p class="register-inline-hint">单次真实注册上限 20；产出写入 <code>accounts/</code>。</p>
+                <p class="register-inline-hint">单次最多注册 20 个账号。</p>
               </div>
             </div>
             <div class="register-panel-foot">
@@ -469,7 +469,7 @@
               </div>
             </div>
             <div class="register-log-body">
-              <div class="console" id="console"><p class="register-log-empty" id="logEmpty">配置完成后点击「开始批次注册」，代理预检、PX、注册各阶段会实时显示在这里</p></div>
+              <div class="console" id="console"><p class="register-log-empty" id="logEmpty">点击「开始批次注册」后，进度会显示在这里</p></div>
             </div>
             <div class="progress-section">
               <div class="register-log-head">
@@ -483,7 +483,7 @@
               </div>
               <div class="progress-wrap tbl-wrap" style="border:0;border-radius:0;">
                 <table>
-                  <thead><tr><th style="width:40px;">#</th><th>状态</th><th>邮箱</th><th>密码</th><th>refresh_token</th><th>失败原因</th></tr></thead>
+                  <thead><tr><th style="width:40px;">#</th><th>状态</th><th>邮箱</th><th>密码</th><th>读信令牌</th><th>失败原因</th></tr></thead>
                   <tbody id="progressBody"><tr><td colspan="6" class="empty">开始注册后，各账号状态会显示在这里</td></tr></tbody>
                 </table>
               </div>
@@ -497,24 +497,23 @@
         <div class="pool-page">
           <div class="stats" id="proxyStatCards"></div>
           <div class="proxy-empty-banner" id="proxyEmptyBanner" style="display:none;">
-            <strong>代理池为空。</strong>请点击「添加代理」导入模板，或在「批次注册」页填写代理后点「开始」——会自动写入 SQLite。
-            注册页勾选「使用代理池」后才会按号分配并统计成功率。
+            <strong>代理池为空。</strong>请点击「添加代理」，或在「批次注册」页填写备用代理后开始。
           </div>
           <div class="card pad" style="margin-bottom:12px;">
             <h2 style="margin-bottom:10px;">池设置</h2>
             <div class="row">
               <label class="field" style="min-width:160px;"><span>分配策略</span>
                 <select id="proxyStrategy">
-                  <option value="round_robin">轮询 round_robin</option>
-                  <option value="least_used">最少使用 least_used</option>
-                  <option value="random">随机 random</option>
+                  <option value="round_robin">轮询</option>
+                  <option value="least_used">最少使用</option>
+                  <option value="random">随机</option>
                 </select>
               </label>
-              <label class="switch"><input type="checkbox" id="proxyRequireHealthy" /> 仅使用预检通过 (ok)</label>
-              <label class="switch"><input type="checkbox" id="proxySticky" checked /> 按账号 sticky 绑定</label>
+              <label class="switch"><input type="checkbox" id="proxyRequireHealthy" /> 仅使用预检通过的代理</label>
+              <label class="switch"><input type="checkbox" id="proxySticky" checked /> 同一账号固定代理</label>
               <button class="btn sm" id="proxySaveSettings">保存设置</button>
             </div>
-            <p class="hint" style="margin-top:8px;">存储：<code>SQLite</code> · <code id="proxyPoolFile">—</code>。成功率请到侧栏「代理统计」查看。</p>
+            <p class="hint" style="margin-top:8px;">成功率请到「代理统计」查看。<span id="proxyPoolFile" style="display:none;"></span></p>
           </div>
           <div class="pool-cockpit-toolbar">
             <select class="pool-compact-select" id="proxyFilterProvider">
@@ -536,7 +535,7 @@
                 <th style="width:100px;">代理商</th>
                 <th style="width:52px;">国家</th>
                 <th>模板（脱敏）</th>
-                <th style="width:56px;">{sid}</th>
+                <th style="width:56px;">独立会话</th>
                 <th style="width:72px;">状态</th>
                 <th style="width:110px;">出口 IP</th>
                 <th style="width:88px;">分配/成功/失败</th>
@@ -627,7 +626,7 @@
               <option value="usable">Graph 可用</option>
               <option value="dead">令牌失效</option>
               <option value="untested">未测活</option>
-              <option value="without">无 Token</option>
+              <option value="without">无令牌</option>
               <option value="dual">双令牌</option>
             </select>
             <select class="pool-compact-select" id="filterBatch">
@@ -639,8 +638,8 @@
             <select class="pool-compact-select" id="exportFmt"></select>
             <button class="pool-btn" id="btnExport">导出</button>
             <button class="pool-btn" id="btnCopySel">复制</button>
-            <button class="pool-btn" id="btnVerifySel" title="重测选中或全部有 Token 的号，含已标记可读信的">测活</button>
-            <button class="pool-btn" id="btnRescueSel" title="rescue_login：用账密重新 OAuth 拿 Graph refresh_token">重登</button>
+            <button class="pool-btn" id="btnVerifySel" title="复查选中账号是否还能读信">测活</button>
+            <button class="pool-btn" id="btnRescueSel" title="用邮箱和密码重新登录，刷新读信令牌">重登</button>
             <button class="pool-btn danger" id="btnDeleteSel">删除</button>
           </div>
           <div class="tbl-wrap">
@@ -654,7 +653,7 @@
                 <th style="width:56px;">批次</th>
                 <th style="width:96px;">注册时间</th>
                 <th style="width:72px;">存活</th>
-                <th style="width:48px;" title="rescue_login 累计次数">重登</th>
+                <th style="width:48px;" title="重登次数">重登</th>
                 <th style="width:96px;">更新</th>
                 <th style="width:88px;">备注</th>
                 <th style="width:64px;">操作</th>
@@ -672,16 +671,16 @@
 
       <section class="section" id="sec-verify">
         <div class="card pad">
-          <h2>四段式可用性校验（单条）</h2>
-          <div class="hint" style="margin-top:0;">粘贴一条 <code>email----password----client_id----refresh_token</code>，判定 graph / outlook_rest / imap 是否可读信。账号池批量测活会<b>重测已标记可读信的号</b>，用来确认有没有死；没有 Token 的才测不了。</div>
-          <div style="margin-top:12px;"><label class="field"><span style="display:block;height:18px;line-height:18px;margin-bottom:6px;color:var(--fg-3);font-size:12px;font-weight:600;">四段式 combo</span><input type="text" id="verCombo" placeholder="email----password----client_id----M.C5xx..." /></label></div>
+          <h2>单条测活</h2>
+          <div class="hint" style="margin-top:0;">填写账号或读信令牌，检查是否还能收信。批量测活会复查已标记可读信的号。</div>
+          <div style="margin-top:12px;"><label class="field"><span style="display:block;height:18px;line-height:18px;margin-bottom:6px;color:var(--fg-3);font-size:12px;font-weight:600;">账号行</span><input type="text" id="verCombo" placeholder="邮箱----密码----应用编号----读信令牌" /></label></div>
           <div class="grid" style="margin-top:12px;">
             <div><label class="field"><span style="display:block;height:18px;line-height:18px;margin-bottom:6px;color:var(--fg-3);font-size:12px;font-weight:600;">或 · 邮箱</span><input type="text" id="verEmail" placeholder="you@outlook.com" /></label></div>
-            <div><label class="field"><span style="display:block;height:18px;line-height:18px;margin-bottom:6px;color:var(--fg-3);font-size:12px;font-weight:600;">或 · refresh_token</span><input type="text" id="verToken" placeholder="M.C5xx..." /></label></div>
-            <div><label class="field"><span style="display:block;height:18px;line-height:18px;margin-bottom:6px;color:var(--fg-3);font-size:12px;font-weight:600;">代理（可选）</span><input type="text" id="verProxy" placeholder="留空直连" /></label></div>
+            <div><label class="field"><span style="display:block;height:18px;line-height:18px;margin-bottom:6px;color:var(--fg-3);font-size:12px;font-weight:600;">或 · 读信令牌</span><input type="text" id="verToken" placeholder="读信令牌" /></label></div>
+            <div><label class="field"><span style="display:block;height:18px;line-height:18px;margin-bottom:6px;color:var(--fg-3);font-size:12px;font-weight:600;">代理</span><input type="text" id="verProxy" placeholder="留空则直连" /></label></div>
           </div>
           <div class="row" style="margin-top:14px;">
-            <label class="switch"><input type="checkbox" id="verImap" checked /> 同时测 IMAP（仅老号会通）</label>
+            <label class="switch"><input type="checkbox" id="verImap" checked /> 同时测 IMAP</label>
             <button class="btn primary" id="verifyBtn">校验可用性</button>
           </div>
           <div id="verResult" style="margin-top:14px; display:none;">
@@ -696,20 +695,19 @@
 
       <section class="section" id="sec-ops">
         <div class="card pad">
-          <h2>IMAP / 保活 <span class="wip">可选 · 非必需</span></h2>
-          <div class="hint" style="margin-top:0;">防封要点（详见 <code>scripts/ANTIBAN.md</code>）：<b>固定住宅/移动 IP</b>、一个 IP 只注册/保活少量号；<b>注册后冷却</b>，别立刻高频调用；<b>低频保活</b>（每号 2–3 天一次即可）；<b>默认走 Graph 读信、不强开 IMAP</b>。</div>
-          <div class="hint" style="margin-top:8px;">保活动作：<code>refresh_token → access_token → GET /me + 列 1 封信 → 轮换新 refresh_token 回写</code>（accounts.txt / accounts_dual.txt / 账号 json）。可对「账号池」勾选后点 <b>保活选中</b>，或在此保活全部。</div>
+          <h2>保活</h2>
+          <div class="hint" style="margin-top:0;">定期刷新令牌，避免账号闲置失效。新注册后请先冷却，再隔几天做一次。</div>
+          <div class="hint" style="margin-top:8px;">可在账号池勾选后操作，或在此保活全部账号。</div>
           <div class="row" style="margin-top:14px;">
-            <button class="btn" id="imapEnableBtn">开启 IMAP（尽力而为）</button>
+            <button class="btn" id="imapEnableBtn">开启 IMAP</button>
             <button class="btn primary" id="keepaliveAllBtn">保活全部</button>
             <button class="btn" id="replenishBtn">回补收码池</button>
-            <button class="btn" id="dbBackupBtn">备份数据库</button>
+            <button class="btn" id="dbBackupBtn">备份数据</button>
           </div>
-          <div class="hint" style="margin-top:8px;">数据存储：<code>accounts/outlook.db</code>（账号 + 代理池 + 批次 + 元数据）。备份输出到 <code>accounts/backups/</code>。</div>
           <div class="msgbox" id="opsMsg"></div>
           <div class="tbl-wrap" id="kaWrap" style="margin-top:12px; display:none;">
             <table>
-              <thead><tr><th>邮箱</th><th>存活</th><th>profile</th><th>信件</th><th>轮换</th><th>详情</th></tr></thead>
+              <thead><tr><th>邮箱</th><th>存活</th><th>资料</th><th>信件</th><th>令牌更新</th><th>详情</th></tr></thead>
               <tbody id="kaBody"></tbody>
             </table>
           </div>
@@ -722,13 +720,13 @@
 
 <div class="modal-bg" id="proxyAddModal">
   <div class="modal">
-    <div class="modal-h">添加代理模板</div>
+    <div class="modal-h">添加代理</div>
     <div class="modal-b">
-      <div class="hint" style="margin-top:0;">每行一条，格式 <code>host:port:user:pass</code> 或带 <code>{sid}</code> 的 sticky 模板。以 <code>#</code> 开头为注释。</div>
-      <label class="field" style="margin-top:12px;"><span>代理商（分组名，如 rapidproxy / kookeey）</span><input type="text" id="proxyAddProvider" placeholder="rapidproxy" /></label>
-      <label class="field" style="margin-top:8px;"><span>国家代码（代理出口，如 US / SG，留空从模板推断）</span><input type="text" id="proxyAddCountry" placeholder="US" maxlength="6" /></label>
-      <label class="field" style="margin-top:8px;"><span>标签（单条时可选）</span><input type="text" id="proxyAddLabel" placeholder="US residential" /></label>
-      <textarea id="proxyAddText" rows="8" placeholder="us.rapidproxy.io:5001:user-session-{sid}-stime-10:pass"></textarea>
+      <div class="hint" style="margin-top:0;">每行一条，格式为 <code>主机:端口:用户名:密码</code>。需要独立出口时，可在用户名中加入会话标识。</div>
+      <label class="field" style="margin-top:12px;"><span>代理商</span><input type="text" id="proxyAddProvider" placeholder="分组名称" /></label>
+      <label class="field" style="margin-top:8px;"><span>出口国家</span><input type="text" id="proxyAddCountry" placeholder="US" maxlength="6" /></label>
+      <label class="field" style="margin-top:8px;"><span>标签</span><input type="text" id="proxyAddLabel" placeholder="住宅" /></label>
+      <textarea id="proxyAddText" rows="8" placeholder="host:port:user:pass"></textarea>
     </div>
     <div class="modal-f">
       <button class="btn ghost" id="proxyAddCancel">取消</button>
@@ -739,11 +737,11 @@
 
 <div class="modal-bg" id="importModal">
   <div class="modal">
-    <div class="modal-h">导入账号（4 段 / 6 段自动识别）</div>
+    <div class="modal-h">导入账号</div>
     <div class="modal-b">
-      <div class="hint" style="margin-top:0;">按 <code>----</code> 分段数自动识别：<br>· 4 段 Graph：<code>email----password----client_id----refresh_token</code><br>· 6 段 login.exe 恢复邮箱：<code>…----recovery_email----recovery_password</code><br>· 6 段 dual 双令牌 SSO：<code>…----login_client_id----login_refresh_token</code>（两枚 refresh，不是恢复邮箱）<br>自动按邮箱去重、校验字段。</div>
+      <div class="hint" style="margin-top:0;">每行一条。四段为邮箱、密码、应用编号、读信令牌；六段可另附恢复邮箱或第二枚令牌。按邮箱去重。</div>
       <div style="margin:12px 0;"><input type="file" id="importFile" accept=".txt,.csv" /></div>
-      <textarea id="importText" rows="9" placeholder="4段: a@outlook.com----pwd----cid----M.C5xx...&#10;6段: b@outlook.com----pwd----cid----M.C5yy...----login_cid----M.C5zz..."></textarea>
+      <textarea id="importText" rows="9" placeholder="邮箱----密码----应用编号----读信令牌"></textarea>
     </div>
     <div class="modal-f">
       <button class="btn ghost" id="importCancel">取消</button>
@@ -762,8 +760,8 @@
     <div class="modal-b" id="detailBody"></div>
     <div class="modal-f">
       <button class="btn sm" id="detailNote">备注</button>
-      <button class="btn sm" id="detailCopy4">复制四段 combo</button>
-      <button class="btn sm" id="detailCopy6">复制六段 combo</button>
+      <button class="btn sm" id="detailCopy4">复制四段</button>
+      <button class="btn sm" id="detailCopy6">复制六段</button>
       <button class="btn sm" id="detailVerify">测活</button>
       <button class="btn sm danger" id="detailDelete">删除</button>
     </div>
@@ -791,7 +789,7 @@
       <button class="btn sm ghost" style="margin-left:auto" id="rescueModalClose">关闭</button>
     </div>
     <div class="modal-b" style="padding-top:12px;">
-      <div class="hint" style="margin-bottom:8px;">即 <code>rescue_login</code>：用账密重新走 OAuth 拿 refresh_token。代理用<b>批次注册页</b>（含 <code>{sid}</code>）；测活仍直连。</div>
+      <div class="hint" style="margin-bottom:8px;">用邮箱和密码重新登录并刷新令牌。代理沿用批次注册页的设置。</div>
       <div class="console" id="rescueConsole" style="height:320px;"></div>
     </div>
   </div>
@@ -802,9 +800,9 @@
     <div class="modal-h">备注 / 标签</div>
     <div class="modal-b">
       <label class="fl">备注</label>
-      <input type="text" id="noteInput" placeholder="可选" />
+      <input type="text" id="noteInput" placeholder="备注" />
       <label class="fl" style="margin-top:12px;">标签（逗号分隔）</label>
-      <input type="text" id="noteTags" placeholder="可选" />
+      <input type="text" id="noteTags" placeholder="标签" />
     </div>
     <div class="modal-f">
       <button class="btn ghost" id="noteCancel">取消</button>
@@ -867,7 +865,7 @@ function survivalTip(a){
 }
 function rescueTip(a){
   const n=Number(a.rescue_count)||0;
-  if(!n) return '未执行过重登 (rescue_login)';
+  if(!n) return '尚未重登';
   const ok=a.last_rescue_ok===true?'成功':(a.last_rescue_ok===false?'失败':'未知');
   const reason=a.last_rescue_reason?` · ${a.last_rescue_reason}`:'';
   return `重登 ${n} 次 · 最近 ${fmtFullTime(a.last_rescue_at)} ${ok}${reason}`;
@@ -906,19 +904,29 @@ function copyIconBtn(val){
   return `<div class="cell-main"><span class="val mono">${escHtml(trunc(val,12))}</span>
     <button type="button" class="icon-btn" title="复制" onclick="copy('${safe}')">${COPY_ICON}</button></div>`;
 }
-function tokenStatusMain(v, hasToken){
-  if(!hasToken) return `<span class="tok-main bad">无 Token</span>`;
+function tokenStatusMain(a){
+  if(a.incubating){
+    const until=a.incubation_until?` title="孵化至 ${escHtml(fmtFullTime(a.incubation_until))}"`:'';
+    return `<span class="tok-main unk"${until}>孵化中</span>`;
+  }
+  const v=a.verify, hasToken=a.has_token;
+  if(!hasToken) return `<span class="tok-main bad">无令牌</span>`;
   if(!v) return `<span class="tok-main unk">未测活</span>`;
-  if(v.ok || v.graph) return `<span class="tok-main ok">✓ Graph 可读信</span>`;
+  if(v.ok || v.graph) return `<span class="tok-main ok">✓ 可读信</span>`;
   return `<span class="tok-main bad">✗ 令牌失效</span>`;
 }
-function tokenStatusDetail(v){
+function tokenStatusDetail(a){
+  if(a.incubating){
+    const until=a.incubation_until?`（至 ${escHtml(fmtFullTime(a.incubation_until))}）`:'';
+    return `<div class="detail-tok"><span class="pill na">孵化中${until}</span></div>`;
+  }
+  const v=a.verify;
   if(!v) return '<div class="detail-tok"><span class="pill na">尚未测活</span></div>';
   const pill=(label, ok, hint)=>`<span class="pill ${ok===null?'na':ok?'on':'off'}" title="${escHtml(hint||'')}">${label}${ok===null?' · 未测':ok?' · 通':' · 不通'}</span>`;
   return `<div class="detail-tok">
-    ${pill('Graph 读信', v.graph, 'Microsoft Graph API，导入工具用这个')}
-    ${pill('Outlook REST', v.outlook_rest, '旧版 REST API，一般可忽略')}
-    ${v.imap!=null?pill('IMAP 登录', v.imap, 'Thunderbird 协议，新号通常关'):''}
+    ${pill('Graph 读信', v.graph, '推荐的读信方式')}
+    ${pill('Outlook REST', v.outlook_rest, '')}
+    ${v.imap!=null?pill('IMAP 登录', v.imap, '部分老账号可用'):''}
   </div>`;
 }
 let DETAIL_EMAIL='';
@@ -935,14 +943,14 @@ function showAccountDetail(email){
     <div class="detail-grid">
       ${detailRow('邮箱', a.email, 'email')}
       ${detailRow('密码', a.password, 'pwd')}
-      ${detailRow('Client ID', a.client_id, 'cid')}
+      ${detailRow('应用编号', a.client_id, 'cid')}
       ${detailRow('恢复邮箱', a.recovery_email||'—', a.recovery_email?'rec_em':null)}
-      ${detailRow('Refresh', a.refresh_token||'—', a.refresh_token?'rt':null, true)}
+      ${detailRow('读信令牌', a.refresh_token||'—', a.refresh_token?'rt':null, true)}
       ${detailRow('恢复密码', a.recovery_password||'—', a.recovery_password?'rec_pw':null)}
     </div>
-    <div class="detail-section">读信 · ${v&&v.ok?'Graph 可用':(v?'令牌失效':'尚未测活')}</div>
-    ${tokenStatusDetail(v)}
-    <div class="detail-section">Combo</div>
+    <div class="detail-section">读信 · ${a.incubating?'孵化中':(v&&v.ok?'可读信':(v?'令牌失效':'尚未测活'))}</div>
+    ${tokenStatusDetail(a)}
+    <div class="detail-section">导出行</div>
     <div class="detail-grid">
       ${detailRow('四段', a.combo||'—', a.combo?'c4':null, true)}
       ${detailRow('六段', c6||'—', c6?'c6':null, true)}
@@ -978,12 +986,12 @@ async function jpost(path, body){
 
 const TITLES = {
   overview:['概览','账号与批次总览'],
-  register:['批次注册','左配置 · 右进度'],
-  proxies:['代理池','增删改查 · 预检 · 账号绑定'],
-  'proxy-stats':['代理统计','成功率趋势 · 代理商维度'],
-  pool:['账号池','管理 / 导入导出 / 测活 / 删除'],
-  verify:['测活','四段式可用性校验'],
-  ops:['IMAP / 保活','可选能力（占位）']
+  register:['批次注册','填写参数后开始'],
+  proxies:['代理池','管理代理与账号绑定'],
+  'proxy-stats':['代理统计','成功率与代理商分布'],
+  pool:['账号池','查看与管理账号'],
+  verify:['测活','检查账号是否可读信'],
+  ops:['保活','续期令牌，保持账号可用']
 };
 const PROXY_SEL = new Set();
 let PROXY_ROWS = [];
@@ -1042,11 +1050,12 @@ async function loadConfig(){
     $('captchaKey').value = savedKey || DEFAULT_CAPTCHA_KEY;
     $('count').value = '1';
     $('concurrency').value = '1';
-    $('cfgHint').textContent = '已预填 Key；注册默认走代理池，备用代理可留空（池内无条目时必填）';
-    const fmtLabel={graph:'4 段式(Graph 读信)',dual:'6 段式(双令牌 SSO，两枚 refresh)',recovery:'6 段式(含恢复邮箱)'};
+    $('cfgHint').textContent = '已填好打码 Key。默认使用代理池，池为空时请填写备用代理。';
+    const fmtLabel={graph:'四段（读信）',dual:'六段（双令牌）',recovery:'六段（含恢复邮箱）'};
     $('exportFmt').innerHTML = (c.export_formats||['graph']).map(f=>`<option value="${f}">${fmtLabel[f]||f}</option>`).join('');
     $('exportFmt').value = c.default_export_format || 'recovery';
-    $('footEngine').textContent = `批量:${c.batch_ready?'引擎':'线程池'} · dual:${c.dual_ready?'就绪':'未就绪'} · 代理池:${(c.proxy_pool&&c.proxy_pool.enabled)||0}`;
+    const poolN=(c.proxy_pool&&c.proxy_pool.enabled)||0;
+    $('footEngine').textContent = poolN?`代理池 ${poolN} 条`:'代理池为空';
     const savedUsePool = localStorage.getItem('outlook_use_proxy_pool');
     if($('useProxyPool')) $('useProxyPool').checked = savedUsePool==='0' ? false : true;
   } catch(e){ $('cfgHint').textContent='配置加载失败: '+e; }
@@ -1058,7 +1067,7 @@ async function health(){
 }
 
 function renderStats(s){
-  const items=[['总数',s.total,'var(--fg)'],['有Token',s.with_token,'var(--info)'],['可用',s.usable,'var(--success)'],['失活',s.dead,'var(--danger)'],['未测',s.untested,'var(--fg-3)'],['今日新增',s.today_new,'var(--brand)']];
+  const items=[['总数',s.total,'var(--fg)'],['有令牌',s.with_token,'var(--info)'],['可用',s.usable,'var(--success)'],['失活',s.dead,'var(--danger)'],['未测',s.untested,'var(--fg-3)'],['今日新增',s.today_new,'var(--brand)']];
   $('statCards').innerHTML = items.map(([l,v,c])=>`<div class="card stat"><div class="lbl">${l}</div><div class="num" style="color:${c}">${v}</div></div>`).join('');
 }
 async function loadJobs(){
@@ -1067,18 +1076,21 @@ async function loadJobs(){
     if(!j.jobs.length){ $('jobsBody').innerHTML='<tr><td colspan="7" class="empty">暂无批次</td></tr>'; return; }
     $('jobsBody').innerHTML=j.jobs.map(x=>{
       const stcls=x.status==='done'?'ok':(x.status==='error'?'err':'run');
+      const stLabel={done:'已完成',error:'失败',running:'进行中'}[x.status]||x.status;
+      const modeLabel=({graph:'四段',graph_recovery:'六段',dual:'双令牌',recovery:'六段'}[x.token_mode])||x.token_mode||'';
       const label=x.batch_label || (x.batch_no ? ('B'+x.batch_no) : x.id);
-      return `<tr data-batch="${escHtml(label)}" style="cursor:pointer" title="查看该批次账号 · ${escHtml(x.id||'')}">
+      return `<tr data-batch="${escHtml(label)}" style="cursor:pointer" title="查看该批次账号">
         <td class="mono">${escHtml(label)}</td><td>${(x.created_at||'').replace('T',' ').slice(0,19)}</td>
-        <td>${x.count}</td><td>${x.concurrency}</td><td>${x.dry_run?'干跑·':''}${x.token_mode||''}</td>
-        <td><span class="st ${stcls}">${x.status}</span></td>
+        <td>${x.count}</td><td>${x.concurrency}</td><td>${x.dry_run?'演示 · ':''}${escHtml(modeLabel)}</td>
+        <td><span class="st ${stcls}">${escHtml(stLabel)}</span></td>
         <td><span style="color:var(--success)">${x.ok_count||0}</span> / <span style="color:var(--danger)">${x.fail_count||0}</span></td></tr>`;
     }).join('');
   } catch(e){}
 }
 
 const jobAccts = {};
-const stMap={'等待中':'wait','进行中':'run','成功':'ok','成功(干跑)':'ok','失败':'err'};
+const stMap={'等待中':'wait','进行中':'run','成功':'ok','成功(干跑)':'ok','成功(演示)':'ok','失败':'err'};
+function displayStatus(s){ return s==='成功(干跑)'?'成功(演示)':(s||''); }
 const seenLogKeys = new Set();
 function renderProgress(){
   const rows=Object.values(jobAccts).sort((a,b)=>a.index-b.index);
@@ -1088,7 +1100,7 @@ function renderProgress(){
     if((a.status||'').startsWith('成功'))ok++;
     else if(a.status==='失败')err++;
     else if(a.status==='进行中')run++;
-    return `<tr><td>${a.index}</td><td><span class="st ${stMap[a.status]||'wait'}">${a.status}</span></td>
+    return `<tr><td>${a.index}</td><td><span class="st ${stMap[a.status]||'wait'}">${displayStatus(a.status)}</span></td>
       <td class="mono">${a.email||'—'}</td>
       <td>${a.password?copyIconBtn(a.password):'<span class="rec-none">—</span>'}</td>
       <td>${a.refresh_token?copyIconBtn(a.refresh_token):'<span class="rec-none">—</span>'}</td>
@@ -1107,7 +1119,7 @@ function logLine(ev){
   if($('logCopyBtn')) $('logCopyBtn').style.display='inline-block';
 }
 function clearLogConsole(){
-  const c=$('console'); c.innerHTML='<p class="register-log-empty" id="logEmpty">配置完成后点击「开始批次注册」，代理预检、PX、注册各阶段会实时显示在这里</p>';
+  const c=$('console'); c.innerHTML='<p class="register-log-empty" id="logEmpty">点击「开始批次注册」后，进度会显示在这里</p>';
   if($('logCopyBtn')) $('logCopyBtn').style.display='none';
 }
 async function copyRegisterLogs(){
@@ -1148,7 +1160,7 @@ async function startRegister(){
     const r=await api('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!r.ok){ const e=await r.json(); throw new Error(e.detail||r.status); }
     const j=await r.json();
-    $('jobBadge').innerHTML=`<span class="badge brand">${j.batch_label||''}</span> <span class="badge neutral">${j.dry_run?'干跑':'真实'} · ${j.count}个 · 并发${j.concurrency}</span>`;
+    $('jobBadge').innerHTML=`<span class="badge brand">${j.batch_label||''}</span> <span class="badge neutral">${j.dry_run?'演示':'正式'} · ${j.count}个 · 并发${j.concurrency}</span>`;
     toast('批次已启动'); connectSSE(j.job_id);
   } catch(e){ logLine({level:'ERROR',msg:'启动失败: '+e.message}); $('startBtn').disabled=false; if($('logLive')) $('logLive').style.display='none'; }
 }
@@ -1162,7 +1174,7 @@ function connectSSE(id){
     else if(ev.type==='summary'){ renderSummary(ev.summary); }
     else if(ev.type==='done'){ es.close(); es=null; $('startBtn').disabled=false; if($('logLive')) $('logLive').style.display='none'; toast('批次完成'); loadAccounts(); loadJobs(); }
   };
-  es.onerror=()=>logLine({level:'WARNING',msg:'SSE 连接中断（任务可能已结束）'});
+  es.onerror=()=>logLine({level:'WARNING',msg:'连接中断，任务可能已结束'});
 }
 
 function renderPool(){
@@ -1185,7 +1197,7 @@ function renderPool(){
       <td>${cellWithCopy(a.email,'email',a.email)}</td>
       <td>${cellPassword(a.email,a.password)}</td>
       <td>${rec}</td>
-      <td>${tokenStatusMain(a.verify, a.has_token)}</td>
+      <td>${tokenStatusMain(a)}</td>
       <td>${batch?`<span class="cell-batch" title="批次 ${escHtml(batch)}${a.batch_id?(' · '+escHtml(a.batch_id)):''}">${escHtml(batch)}</span>`:'<span class="rec-none">—</span>'}</td>
       <td class="cell-time" title="${escHtml(fmtFullTime(a.created_at))}">${escHtml(fmtShortTime(a.created_at))}</td>
       <td class="cell-age" title="${escHtml(survivalTip(a))}">${escHtml(fmtSurvivalAge(a))}</td>
@@ -1221,7 +1233,7 @@ $('detailBody').addEventListener('click',(e)=>{
 });
 $('detailCopy4').onclick=()=>{ const a=accountByEmail(DETAIL_EMAIL); if(a&&a.combo) copy(a.combo); };
 $('detailNote').onclick=()=>{ if(DETAIL_EMAIL) editNote(DETAIL_EMAIL); };
-$('detailCopy6').onclick=()=>{ const a=accountByEmail(DETAIL_EMAIL); const c=combo6(a||{}); if(c) copy(c); else toast('无六段 combo'); };
+$('detailCopy6').onclick=()=>{ const a=accountByEmail(DETAIL_EMAIL); const c=combo6(a||{}); if(c) copy(c); else toast('没有六段格式可复制'); };
 $('detailVerify').onclick=()=>{ if(DETAIL_EMAIL){ verifyRow(DETAIL_EMAIL).then(()=>showAccountDetail(DETAIL_EMAIL)); } };
 $('detailDelete').onclick=()=>{ if(DETAIL_EMAIL){ delRow(DETAIL_EMAIL); $('detailModal').classList.remove('show'); } };
 function isGraphReadable(a){
@@ -1296,7 +1308,7 @@ async function runBatchRescue(emails){
   }
   const proxy=($('proxy')&&$('proxy').value.trim())||'';
   const usePool=$('useProxyPool')&&$('useProxyPool').checked;
-  if(!usePool&&!proxy) rescueLog('WARNING','未启用代理池且未填备用代理，将使用 rescue_login 默认模板');
+  if(!usePool&&!proxy) rescueLog('WARNING','未启用代理池且未填备用代理，将使用默认代理');
   if(noPwd) rescueLog('WARNING', `${noPwd} 个缺密码，已跳过`);
   rescueLog('INFO', `开始重登 ${list.length} 个（${usePool?'代理池':'单代理'}，并发 1）`);
   try {
@@ -1332,7 +1344,7 @@ async function verifyOneAccount(a){
   if(!a) return {ok:false,summary:'账号不存在'};
   const rt=a.refresh_token||'';
   if(!rt){
-    return {ok:false,email:a.email,summary:'无 refresh_token，无法测活',unable:true};
+    return {ok:false,email:a.email,summary:'缺少读信令牌，无法测活',unable:true};
   }
   // 测活默认直连：refresh 换票不需要注册代理；注册页 #proxy 多为住宅 IP，易导致 login.microsoftonline.com SSL 断连
   const proxy=($('verProxy')&&$('verProxy').value.trim())||'';
@@ -1362,8 +1374,8 @@ async function runBatchVerify(emails){
   $('verifyModal').classList.add('show');
   $('btnVerifySel').disabled=true;
   let ok=0, fail=0, died=0, skipped=0, i=0;
-  verifyLog('INFO', `开始测活 ${list.length} 个（OAuth 换票默认直连，不走注册页代理）`);
-  if(noToken) verifyLog('WARNING', `${noToken} 个没有 refresh_token，测不了，未列入`);
+  verifyLog('INFO', `开始测活 ${list.length} 个（默认直连）`);
+  if(noToken) verifyLog('WARNING', `${noToken} 个没有读信令牌，已跳过`);
   const queue=list.slice();
   const workers=Array.from({length:Math.min(3,queue.length||1)}, async()=>{
     while(queue.length){
@@ -1440,14 +1452,14 @@ async function downloadExport(emails){
     if(total===0) toast('无可导出账号');
     else if(degraded) toast('所有账号均无双令牌，已按 4 段导出（共 '+total+' 行）');
     else if(six<total) toast('部分账号无双令牌，已按 4 段导出（'+six+'/'+total+' 行为 6 段）');
-    else toast('已导出 6 段双令牌 SSO（共 '+total+' 行）');
+    else toast('已导出六段双令牌（共 '+total+' 行）');
   } else if(fmt==='recovery'){
     if(total===0) toast('无可导出账号');
     else if(degraded) toast('所有账号均无恢复邮箱，已按 4 段导出（共 '+total+' 行）');
     else if(six<total) toast('部分账号无恢复邮箱，已按 4 段导出（'+six+'/'+total+' 行为六段）');
     else toast('已导出六段式（含恢复邮箱，共 '+total+' 行）');
   } else {
-    toast(total?('已导出 Graph 四段式（共 '+total+' 行）'):'无可导出账号');
+    toast(total?('已导出四段式（共 '+total+' 行）'):'无可导出账号');
   }
 }
 $('btnCopySel').onclick=()=>{ if(!SELECTED.size){toast('未选中账号');return;}
@@ -1497,9 +1509,9 @@ async function verifyCombo(){
     setStBadge($('vRest'),'Outlook REST',j.outlook_rest?j.outlook_rest.ok:null,j.outlook_rest?j.outlook_rest.status:null);
     if(j.imap&&j.imap.tested) setStBadge($('vImap'),'IMAP',j.imap.ok,j.imap.ok?'OK':(j.imap.stage||'✗')); else setStBadge($('vImap'),'IMAP',null,'未测');
     $('vSummary').className='msgbox show '+(j.ok?'ok':'err'); $('vSummary').textContent=j.summary||j.message||(j.ok?'可用':'不可用');
-    let scope=j.granted_scope?('授予 scope: '+j.granted_scope):'';
-    if(j.refresh_error) scope+=(scope?' | ':'')+'refresh 错误: '+j.refresh_error;
-    if(j.imap&&j.imap.tested&&j.imap.detail) scope+=(scope?' | ':'')+'imap: '+j.imap.detail;
+    let scope=j.granted_scope?('授权范围: '+j.granted_scope):'';
+    if(j.refresh_error) scope+=(scope?' | ':'')+'令牌错误: '+j.refresh_error;
+    if(j.imap&&j.imap.tested&&j.imap.detail) scope+=(scope?' | ':'')+'IMAP: '+j.imap.detail;
     $('vScope').textContent=scope; loadAccounts();
   } catch(e){ $('vSummary').className='msgbox show err'; $('vSummary').textContent='校验失败: '+e; }
   finally { $('verifyBtn').disabled=false; }
@@ -1511,10 +1523,10 @@ $('startBtn').onclick=startRegister;
 if($('logCopyBtn')) $('logCopyBtn').onclick=()=>void copyRegisterLogs();
 $('verifyBtn').onclick=verifyCombo;
 $('globalRefresh').onclick=()=>{ loadConfig(); loadAccounts(); loadJobs(); health(); toast('已刷新'); };
-$('imapEnableBtn').onclick=async()=>{ const j=await jpost('/api/imap-enable'); toast(j.message||'IMAP 未实现'); opsMsg('warn',j.message); };
+$('imapEnableBtn').onclick=async()=>{ const j=await jpost('/api/imap-enable'); toast(j.message||'IMAP 暂不可用'); opsMsg('warn',j.message); };
 $('keepaliveAllBtn').onclick=async()=>{ toast('开始保活全部账号'); await runKeepalive(null); };
 async function runKeepalive(emails){
-  opsMsg('warn','保活中…（refresh→access→GET /me+列信→轮换回写，并发≤5）');
+  opsMsg('warn','保活中…');
   $('kaWrap').style.display='none'; $('kaBody').innerHTML='';
   try {
     const j=await jpost('/api/keepalive',{emails});
@@ -1528,28 +1540,28 @@ async function runKeepalive(emails){
       <td>${r.rotated?'<span class="badge brand">已轮换</span>':'<span style="color:var(--fg-4)">—</span>'}</td>
       <td style="font-size:11px;color:var(--fg-3)">${r.detail||''}</td></tr>`).join('');
     $('kaWrap').style.display='block';
-    const done=`保活完成：存活 ${j.alive||0}/${j.total||0}，轮换 ${j.rotated||0}`;
-    opsMsg('ok', done+'（新 refresh_token 已回写）');
+    const done=`保活完成：存活 ${j.alive||0}/${j.total||0}，已更新 ${j.rotated||0}`;
+    opsMsg('ok', done+'（新令牌已保存）');
     toast(done);
     loadAccounts();
   } catch(e){ opsMsg('err','保活失败: '+e); toast('保活失败'); }
 }
 $('replenishBtn').onclick=async()=>{ const emails=SELECTED.size?selectedEmails():null;
   toast('开始回补收码池');
-  opsMsg('warn','回补中…（会 probe_token 校验 graph=200）');
+  opsMsg('warn','回补中…');
   try { const j=await jpost('/api/replenish',{emails});
     if(j.implemented===false){ opsMsg('err',j.message||'不可用'); toast(j.message||'回补不可用'); return; }
     const msg=`回补完成：新增 ${j.added}，重复 ${j.duplicate}，跳过 ${j.skipped}`;
-    opsMsg('ok', msg+'｜池文件 '+j.pool);
+    opsMsg('ok', msg);
     toast(msg);
   } catch(e){ opsMsg('err','回补失败: '+e); toast('回补失败'); } };
 $('dbBackupBtn').onclick=async()=>{
   opsMsg('warn','备份中…');
   try {
     const j=await jpost('/api/database/backup',{});
-    if(!j.ok) throw new Error(j.detail||'backup failed');
-    opsMsg('ok','已备份: '+j.path);
-    toast('数据库已备份');
+    if(!j.ok) throw new Error(j.detail||'备份失败');
+    opsMsg('ok','数据已备份');
+    toast('数据已备份');
   } catch(e){ opsMsg('err','备份失败: '+e); toast('备份失败'); }
 };
 
@@ -1846,7 +1858,7 @@ async function loadProxyPool(){
     renderProxyStats(j.stats);
     renderProxyTable();
     renderProxyBindings(j.bindings||[]);
-    if($('proxyPoolFile')) $('proxyPoolFile').textContent=(j.backend||'sqlite')+' · '+(j.file||'—');
+    if($('proxyPoolFile')) $('proxyPoolFile').textContent='';
     const provSel=$('proxyFilterProvider');
     if(provSel){
       const cur=provSel.value;

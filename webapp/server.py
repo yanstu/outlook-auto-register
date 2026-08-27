@@ -1243,7 +1243,7 @@ def start_register(req: RegisterRequest) -> JSONResponse:
     if req.count < 1:
         raise HTTPException(status_code=400, detail="数量至少为 1。")
     if not req.dry_run and req.count > 20:
-        raise HTTPException(status_code=400, detail="真实注册单次上限 20，请分批。")
+        raise HTTPException(status_code=400, detail="单次最多注册 20 个，请分批。")
     if not req.dry_run:
         # DB 为主：页面填了就落库；没填则回读库里已存的 key。
         provided_key = (req.captcha_key or "").strip()
@@ -1263,12 +1263,12 @@ def start_register(req: RegisterRequest) -> JSONResponse:
             if stats.get("enabled", 0) < 1 and not proxy:
                 raise HTTPException(
                     status_code=400,
-                    detail="代理池为空。请在「代理池」页添加，或在注册页填写代理（会自动写入数据库）。",
+                    detail="代理池为空。请先添加代理，或在注册页填写备用代理。",
                 )
         elif not proxy:
             raise HTTPException(status_code=400, detail="请填写代理或启用「使用代理池」。")
         if not captcha_key:
-            raise HTTPException(status_code=400, detail="请填写 captcha.run Key（Web 页对应输入框，会存入数据库，下次免填）。")
+            raise HTTPException(status_code=400, detail="请填写 captcha.run Key。")
     concurrency = max(1, min(int(req.concurrency or 1), req.count))
 
     with _jobs_lock:
@@ -1321,7 +1321,7 @@ def list_jobs() -> JSONResponse:
 def get_job(job_id: str) -> JSONResponse:
     job = _jobs.get(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="任务不存在")
+        raise HTTPException(status_code=404, detail="任务不存在。")
     return JSONResponse(job.snapshot())
 
 
@@ -1329,7 +1329,7 @@ def get_job(job_id: str) -> JSONResponse:
 def job_events(job_id: str) -> StreamingResponse:
     job = _jobs.get(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="任务不存在")
+        raise HTTPException(status_code=404, detail="任务不存在。")
 
     def gen():
         yield f"data: {json.dumps({'type': 'snapshot', 'snapshot': job.snapshot()}, ensure_ascii=False)}\n\n"
@@ -1628,7 +1628,7 @@ def set_meta(req: MetaRequest) -> JSONResponse:
 
 def _verify_one(email: str, refresh_token: str, proxy_url: str, test_imap: bool) -> dict[str, Any]:
     if not refresh_token:
-        return {"ok": False, "email": email, "usable": [], "message": "缺少 refresh_token"}
+        return {"ok": False, "email": email, "usable": [], "message": "缺少读信令牌"}
 
     def _probe(via: str) -> dict[str, Any]:
         return graph_mail.probe_token(email or "unknown", refresh_token, proxy_url=via)
@@ -1692,9 +1692,9 @@ def _verify_one(email: str, refresh_token: str, proxy_url: str, test_imap: bool)
     elif "outlook_rest" in usable:
         res["summary"] = "✅ 可用：Outlook REST 令牌可读信"
     elif res["imap"].get("ok"):
-        res["summary"] = "⚠️ 仅 IMAP 可用（老号）"
+        res["summary"] = "⚠️ 仅 IMAP 可用"
     else:
-        res["summary"] = "❌ 不可用：graph/outlook_rest/imap 均未通过"
+        res["summary"] = "❌ 不可用：读信校验未通过"
     return res
 
 
@@ -1715,7 +1715,7 @@ def verify_combo(req: VerifyComboRequest) -> JSONResponse:
         refresh_token = refresh_token or c_rt
     if not refresh_token:
         return JSONResponse({"ok": False, "email": email, "usable": [],
-                             "message": "缺少 refresh_token（该 combo 第四段为空，无法校验）。"})
+                             "message": "缺少读信令牌，无法校验。"})
     try:
         res = _verify_one(email, refresh_token, _proxy_url(req.proxy), req.test_imap)
         try:
@@ -1768,15 +1768,15 @@ def verify_batch(req: VerifyBatchRequest) -> JSONResponse:
                     "incubating": True,
                     "incubation_until": r.get("incubation_until") or "",
                     "usable": [],
-                    "summary": "孵化期跳过（不调用微软接口）",
-                    "message": "incubating",
+                    "summary": "孵化期中，暂不测活",
+                    "message": "孵化期中",
                 })
                 continue
             tasks.append((r["email"], r["refresh_token"]))
         del by_email
 
     if not tasks and not skipped:
-        return JSONResponse({"ok": True, "results": [], "message": "无可校验账号（缺 refresh_token）。"})
+        return JSONResponse({"ok": True, "results": [], "message": "无可校验账号（缺少读信令牌）。"})
 
     conc = max(1, min(int(req.concurrency or 4), 8, len(tasks) or 1))
     results: list[dict[str, Any]] = list(skipped)
@@ -1831,10 +1831,7 @@ def imap_enable() -> JSONResponse:
             "ok": False,
             "implemented": False,
             "required": False,
-            "message": "开启 IMAP 为可选项，非必需：默认走 Graph 令牌读信，不依赖 IMAP 协议开关。"
-            "主动开启（SetConsumerMailbox）需网页会话 OWA usertoken，纯 API 链路暂未产出；"
-            "且新号会返回 412（反滥用），约 10–24h 账号成熟后才可能开成。"
-            "确认某号 IMAP 状态请用『测活』勾选 IMAP。",
+            "message": "默认已用读信令牌收信，一般无需开启 IMAP。该功能暂不可用。",
         }
     )
 
@@ -1915,7 +1912,7 @@ def rescue_accounts(req: RescueRequest) -> JSONResponse:
         return JSONResponse({
             "ok": False,
             "implemented": False,
-            "message": "救援脚本 scripts.rescue_login 无法导入，暂不可用。",
+            "message": "重登功能暂不可用。",
             "results": [],
         })
     rows = _load_accounts()
@@ -1934,7 +1931,7 @@ def rescue_accounts(req: RescueRequest) -> JSONResponse:
             "total": 0,
             "ok_count": 0,
             "results": [],
-            "message": "无可救援账号（需有密码）。",
+            "message": "没有可重登的账号（需要密码）。",
         })
 
     proxy = rescue_proxy_raw((req.proxy or "").strip())
@@ -2011,7 +2008,7 @@ def keepalive(req: KeepaliveRequest) -> JSONResponse:
     """对选中（或全部）账号并发跑 keepalive_one：refresh→access→GET /me+列信→轮换回写。"""
     if not KEEPALIVE_READY or keepalive_one is None:
         return JSONResponse({"ok": False, "implemented": False,
-                             "message": "保活脚本 scripts.keepalive 无法导入，暂不可用。"})
+                             "message": "保活功能暂不可用。"})
     proxy_url = _proxy_url(req.proxy)
     rows = _load_accounts()
     want = set(req.emails) if req.emails else None
@@ -2026,7 +2023,7 @@ def keepalive(req: KeepaliveRequest) -> JSONResponse:
                 "ok": False,
                 "skipped": True,
                 "incubating": True,
-                "detail": "孵化期跳过",
+                "detail": "孵化期中",
             })
             continue
         line = r.get("combo_dual") or r.get("combo") or ""
@@ -2035,7 +2032,7 @@ def keepalive(req: KeepaliveRequest) -> JSONResponse:
         tasks.append((r["email"], line))
     if not tasks and not skipped:
         return JSONResponse({"ok": True, "implemented": True, "results": [],
-                             "message": "无可保活账号（缺 refresh_token）。"})
+                             "message": "无可保活账号（缺少读信令牌）。"})
 
     conc = max(1, min(int(req.concurrency or 5), 5, len(tasks) or 1))
     results: list[dict[str, Any]] = list(skipped)
@@ -2105,7 +2102,7 @@ def replenish_pool_api(req: ReplenishRequest) -> JSONResponse:
         from outlook_api_reg.graph_mail import probe_token
         from outlook_api_reg.proof_pool import pool_path
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse({"ok": False, "implemented": False, "message": f"收码池模块不可用: {exc}"})
+        return JSONResponse({"ok": False, "implemented": False, "message": "收码池暂不可用。"})
     pool = pool_path() or (PROJECT_DIR.parent / "1000outlook.txt")
     pool = Path(pool)
     proxy_url = _proxy_url(req.proxy)
@@ -2249,7 +2246,7 @@ def add_proxy_pool(req: ProxyPoolAddRequest) -> JSONResponse:
             if line and not line.startswith("#"):
                 templates.append(line)
     if not templates:
-        raise HTTPException(status_code=400, detail="请提供至少一条代理模板。")
+        raise HTTPException(status_code=400, detail="请提供至少一条代理。")
     created = proxy_pool.add_proxies(
         templates,
         label=(req.label or "").strip(),
@@ -2317,7 +2314,7 @@ def bind_proxy_pool(req: ProxyPoolBindRequest) -> JSONResponse:
         raise HTTPException(status_code=404, detail="代理不存在。")
     resolved = proxy_pool.resolve_template(ent.get("template") or "")
     if not resolved:
-        raise HTTPException(status_code=400, detail="代理模板无效。")
+        raise HTTPException(status_code=400, detail="代理格式无效。")
     proxy_pool.bind_account(req.email.strip().lower(), req.proxy_id, resolved, purpose="manual")
     return JSONResponse({"ok": True, "email": req.email.strip().lower(), "resolved_masked": proxy_pool.mask_template(resolved)})
 
