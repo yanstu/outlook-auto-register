@@ -1845,7 +1845,7 @@ function renderProxyBindings(rows){
     <td class="mono">${escHtml(b.email)}</td>
     <td>${escHtml(b.proxy_label||b.proxy_id||'—')}</td>
     <td class="mono" style="font-size:11px;">${escHtml(b.resolved_masked||'—')}</td>
-    <td>${escHtml(b.purpose||'—')}</td>
+    <td>${escHtml({register:'注册',rescue:'重登',manual:'手动'}[b.purpose]||b.purpose||'—')}</td>
     <td class="cell-time">${escHtml((b.assigned_at||'').replace('T',' ').slice(0,19))}</td>
     <td><button type="button" class="btn sm danger proxy-unbind" data-email="${escHtml(b.email)}">解绑</button></td>
   </tr>`).join('');
