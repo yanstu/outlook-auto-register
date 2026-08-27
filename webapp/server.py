@@ -164,7 +164,7 @@ def _build_register_proxy_plan(p: dict[str, Any], count: int) -> tuple[list[str]
                 plan = plan + list(extra)
                 meta["fallback_used"] = True
         if not plan:
-            raise ValueError("代理池无可用条目，请先在「代理池」页添加代理，或在注册页填写备用代理（会自动写入数据库）。")
+            raise ValueError("代理池暂无可用条目。请先添加代理，或填写备用代理。")
         return plan, meta
     proxy = (p.get("proxy") or "").strip()
     if not proxy:
@@ -624,22 +624,38 @@ def _batch_index() -> dict[str, dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
+def _token_mode_label(mode: str) -> str:
+    return {
+        "graph": "四段",
+        "graph_recovery": "六段（含恢复邮箱）",
+        "dual": "六段（双令牌）",
+        "recovery": "六段（含恢复邮箱）",
+        "login_exe": "六段（含恢复邮箱）",
+    }.get((mode or "").strip().lower(), mode or "")
+
+
+def _proxy_strategy_label(raw: str) -> str:
+    return {
+        "round_robin": "轮询",
+        "least_used": "最少使用",
+        "random": "随机",
+    }.get((raw or "").strip().lower(), raw or "—")
+
+
 def _run_dry(job: Job) -> None:
     steps = [
-        "代理预检通过: (模拟) 出口=203.0.113.7",
-        "选用邮箱: 模拟随机前缀@outlook.com",
-        "risk/initialize → humanSensorUrl 预加载",
-        "captcha.run silent → press（模拟通过）",
-        "risk/verify #2 challengeSolution 提交",
-        "CreateAccount 成功",
-        "oauth20_authorize.srf slt 登录（模拟）",
+        "代理预检通过（演示）",
+        "已选定演示邮箱",
+        "人机验证通过（演示）",
+        "账号创建成功（演示）",
+        "登录完成（演示）",
     ]
     mode = job.params.get("token_mode") or DEFAULT_TOKEN_MODE
-    job.push_log("INFO", f"产出格式: {mode}（干跑，仅演示）｜并发度 {job.concurrency}")
+    job.push_log("INFO", f"产出格式: {_token_mode_label(mode)}（演示，不消耗额度）｜并发 {job.concurrency}")
 
     def one(i: int) -> None:
         job.update_account(i, status="进行中")
-        job.push_log("INFO", f"[#{i+1}] 干跑开始（不消耗真实资源）")
+        job.push_log("INFO", f"[#{i+1}] 演示开始（不消耗真实额度）")
         for s in steps:
             job.push_log("INFO", f"[#{i+1}] {s}")
             time.sleep(0.08)
@@ -649,15 +665,14 @@ def _run_dry(job: Job) -> None:
             rec = f"rec{i+1}_{uuid.uuid4().hex[:6]}@your-cf-domain.com" if mode == "graph_recovery" else f"rec{i+1}_{uuid.uuid4().hex[:6]}@your-recovery-host.com"
             rec_pwd = "cf_domain" if mode == "graph_recovery" else "DryRunRecPwd"
             combo = f"{email}----{pwd}----{MAIL_CLIENT_ID}--------{rec}----{rec_pwd}"
-            label = "Graph 六段式" if mode == "graph_recovery" else "login.exe 六段式(IMAP)"
-            job.push_log("INFO", f"[#{i+1}] 干跑产出 {label}（恢复邮箱，非 dual）")
+            job.push_log("INFO", f"[#{i+1}] 演示产出 {_token_mode_label(mode)}")
         else:
             combo = f"{email}----{pwd}----{MAIL_CLIENT_ID}----"
         job.update_account(
-            i, status="成功(干跑)", email=email, password=pwd,
+            i, status="成功(演示)", email=email, password=pwd,
             client_id=MAIL_CLIENT_ID, refresh_token="", combo=combo, error="",
         )
-        job.push_log("INFO", f"[#{i+1}] 干跑完成（未写盘、未消耗额度）")
+        job.push_log("INFO", f"[#{i+1}] 演示完成（未保存、未消耗额度）")
 
     conc = max(1, min(job.concurrency, job.count))
     with ThreadPoolExecutor(max_workers=conc) as ex:
@@ -721,7 +736,7 @@ def _do_register_one(job: Job, i: int, p: dict[str, Any]) -> None:
             combo_recovery=result.to_combo(recovery=True) if result.recovery_email else "",
             error="", saved_path=saved,
         )
-        tip = "已取 refresh_token" if result.refresh_token else "无 refresh_token"
+        tip = "已取得读信令牌" if result.refresh_token else "缺少读信令牌"
         if result.recovery_email:
             tip += "，已绑恢复邮箱"
         job.push_log("INFO", f"[#{i+1}] 注册成功 {result.email}（{tip}）")
@@ -796,15 +811,15 @@ def _run_batch_iter(job: Job, p: dict[str, Any]) -> bool:
                 )
                 job.push_log(
                     "INFO",
-                    f"引擎批量启动：共 {ev.get('total')} 个，并发 {ev.get('concurrency')}，"
-                    f"相邻启动错峰 {jtxt}",
+                    f"批量任务开始：共 {ev.get('total')} 个，并发 {ev.get('concurrency')}，"
+                    f"相邻启动间隔 {jtxt}",
                 )
                 if ev.get("proxy_unique"):
-                    job.push_log("INFO", "防封·一号一 IP：每号独立 {sid} 会话（出口 IP 不同）")
+                    job.push_log("INFO", "每个账号使用独立出口，避免共用同一 IP")
                 elif not ev.get("proxy_has_sid") and (p.get("proxy") or p.get("proxy_plan")):
                     job.push_log(
                         "WARNING",
-                        "代理未含 {sid}：全批可能共用同一出口 IP，建议改用带 {sid} 的模板",
+                        "当前代理未开启独立会话，整批可能共用同一出口。建议换用带独立会话的代理。",
                     )
             elif etype == "account_start":
                 consumed = True
@@ -840,7 +855,7 @@ def _run_batch_iter(job: Job, p: dict[str, Any]) -> bool:
                         combo=combo, combo_dual=ev.get("combo_dual") or "",
                         combo_recovery=rec_combo,
                         login_token=bool(ev.get("login_token_present")),
-                        error="", saved_path="(引擎已保存)",
+                        error="", saved_path="(已保存到账号池)",
                     )
                     _after_register_proxy(
                         ev.get("email") or "", assignments, idx, success=True,
@@ -877,11 +892,11 @@ def _run_batch_iter(job: Job, p: dict[str, Any]) -> bool:
                     "INFO",
                     f"本批完成：成功 {ev.get('ok')}/{ev.get('total')}，本批耗时 "
                     f"{ev.get('elapsed')}s，单号均耗 {ev.get('avg_per_account')}s，"
-                    f"阶段大头：{top_txt}",
+                    f"最耗时阶段：{top_txt}",
                 )
         return True
     except Exception as exc:  # noqa: BLE001
-        job.push_log("WARNING", f"引擎 register_batch_iter 执行异常: {exc}")
+        job.push_log("WARNING", f"批量任务中断: {exc}")
         return consumed  # 已消费部分事件则不重跑，避免重复真实注册
     finally:
         _active_batch_job = None
@@ -920,24 +935,24 @@ def _run_real(job: Job) -> None:
     if p.get("use_proxy_pool"):
         job.push_log(
             "INFO",
-            f"代理池：已规划 {len(plan)} 条（策略 {pmeta.get('strategy') or '—'}）",
+            f"代理池：已分配 {len(plan)} 条（{_proxy_strategy_label(str(pmeta.get('strategy') or ''))}）",
         )
     retries = max(1, int((os.environ.get("REG_PROXY_RETRIES") or "3").strip() or "3"))
-    job.push_log("INFO", f"PX/代理失败自动重试：最多 {retries} 次（REG_PROXY_RETRIES）")
+    job.push_log("INFO", f"代理失败将自动重试，最多 {retries} 次")
 
     requested_mode = p.get("token_mode") or DEFAULT_TOKEN_MODE
     effective = _apply_token_mode(requested_mode)
     if effective != requested_mode:
-        job.push_log("WARNING", f"产出格式 {requested_mode} 不可用，已降级为 {effective}")
-    fmt_label = {"graph": "Graph 四段", "graph_recovery": "Graph 六段", "dual": "双令牌六段"}.get(
-        effective, effective
-    )
-    job.push_log("INFO", f"产出格式: {fmt_label}｜并发度 {job.concurrency}")
+        job.push_log(
+            "WARNING",
+            f"产出格式 {_token_mode_label(requested_mode)} 不可用，已改为 {_token_mode_label(effective)}",
+        )
+    job.push_log("INFO", f"产出格式: {_token_mode_label(effective)}｜并发 {job.concurrency}")
 
     # 优先引擎生成器；不可用则线程池兜底
     if _run_batch_iter(job, p):
         return
-    job.push_log("INFO", "register_batch_iter 不可用，使用线程池兜底并发 register_one")
+    job.push_log("INFO", "已改用备用并发模式")
     conc = max(1, min(job.concurrency, job.count))
     with ThreadPoolExecutor(max_workers=conc) as ex:
         futs = [ex.submit(_do_register_one, job, i, p) for i in range(job.count)]
@@ -950,7 +965,7 @@ def _job_worker(job_id: str) -> None:
     _thread_job[threading.get_ident()] = job_id
     job.push_log(
         "INFO",
-        f"批次 {job.batch_label} 开始执行（{job.count} 个，并发 {job.concurrency}）",
+        f"批次 {job.batch_label} 开始（{job.count} 个，并发 {job.concurrency}）",
     )
     try:
         if job.params.get("dry_run"):
