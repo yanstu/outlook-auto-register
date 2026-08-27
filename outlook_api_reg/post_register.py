@@ -99,7 +99,7 @@ def submit_consent(http: OutlookHttpSession, resp: requests.Response) -> Optiona
         )
         return None
     action = resp.url  # account.live.com/Consent/Update?...&ru=login.live.com/oauth20_authorize.srf...
-    logger.info("提交 OAuth 同意授权 ucaction=Yes (client_id=%s)", client_id)
+    logger.info("提交授权同意")
     return http.post(
         action,
         data={
@@ -1166,7 +1166,7 @@ def fetch_mail_oauth_code(
     info: dict[str, str] = {}
     for name, ep in endpoints:
         url = f"{ep}?{urllib.parse.urlencode(base_params)}"
-        logger.info("mail OAuth 授权(%s 端点)…", name)
+        logger.info("读信授权（%s）…", name)
         resp = http.get(url, allow_redirects=True)
         resp = follow_auto_post_forms(
             http, resp, tag=f"authorize_{name}", max_hops=12, proof_meta=proof_meta,
@@ -1176,10 +1176,10 @@ def fetch_mail_oauth_code(
         m = re.search(r"[?&]code=([^&]+)", final)
         if m:
             info["code"] = urllib.parse.unquote(m.group(1))
-            logger.info("获取 mail OAuth code 成功(%s 端点)", name)
+            logger.info("获取读信授权成功（%s）", name)
             return info
         _dump_html(f"authorize_{name}_final.html", resp.text or "")
-        logger.warning("(%s 端点) 未从跳转 URL 解析到 OAuth code: %s", name, final[:120])
+        logger.warning("（%s）未从跳转解析到授权码", name)
     return info
 
 
@@ -1219,13 +1219,10 @@ def exchange_code_for_token(
         if data.get(key) is not None:
             out[key] = str(data[key])
     if out.get("refresh_token"):
-        logger.info("token 交换成功，已获取 refresh_token")
+        logger.info("换取令牌成功，已获取读信令牌")
     elif out.get("id_token") or out.get("access_token"):
         # 拿到 id_token/access_token 但没 refresh_token → 多半是 scope 缺 offline_access
-        logger.warning(
-            "token 交换只返回 %s，无 refresh_token（scope 可能缺 offline_access）；granted_scope=%s",
-            "id_token" if out.get("id_token") else "access_token", out.get("scope", ""),
-        )
+        logger.warning("换取令牌只返回部分结果，未拿到读信令牌")
     return out
 
 
@@ -1268,7 +1265,8 @@ def fetch_login_token(
         if ltok.get("refresh_token"):
             out["status"] = "ok"
             out.pop("fail_reason", None)
-            logger.info(
+            logger.info("登录令牌获取成功")
+            logger.debug(
                 "token#2 成功(attempt=%d): refresh_token=True id_token=%s scope=%s",
                 i, bool(ltok.get("id_token")), ltok.get("scope", ""),
             )
@@ -1360,9 +1358,7 @@ def complete_oauth_after_signup(
                 info["login_status"] = "error"
                 info["login_fail_reason"] = str(exc)
             if not info.get("login_refresh_token"):
-                logger.warning("双令牌 token#2 最终未产出 refresh_token，本号回落只存四段"
-                               "（status=%s reason=%s）",
-                               info.get("login_status"), info.get("login_fail_reason", ""))
+                logger.warning("双令牌最终未产出读信令牌，本号回落只存四段")
 
     logger.info("注册后登录链路完成: logged_in=%s mail_refresh=%s login_refresh=%s",
                 info.get("logged_in"), bool(info.get("mail_refresh_token")),

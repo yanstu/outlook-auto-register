@@ -230,7 +230,7 @@ def save_register_result(
             conn.commit()
         finally:
             conn.close()
-    logger.info("账号已写入 SQLite: %s（incubating）", result.email)
+    logger.info("账号已保存（孵化中）: %s", result.email)
     return f"sqlite:{result.email}"
 
 

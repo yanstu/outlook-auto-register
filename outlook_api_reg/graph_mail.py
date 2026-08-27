@@ -100,7 +100,7 @@ def refresh_token_for(
                 time.sleep(1.0 * (attempt + 1))
                 continue
     desc = str(last_exc or "network error")[:200]
-    logger.warning("refresh_token 网络异常（已重试 %d 次）: %s", retries, desc)
+    logger.warning("读信令牌网络异常（已重试 %d 次）: %s", retries, desc)
     return {
         "error": "transient_network",
         "error_description": desc,

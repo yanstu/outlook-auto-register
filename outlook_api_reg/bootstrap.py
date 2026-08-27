@@ -61,13 +61,13 @@ def bootstrap_session(http: OutlookHttpSession, *, mkt: str = DEFAULT_MKT, lc: s
         "lc": lc,
     })
     auth_url = f"https://login.live.com/oauth20_authorize.srf?{auth_qs}"
-    logger.info("获取 OAuth 登录页…")
+    logger.info("获取授权登录页…")
     login_resp = http.get(auth_url, allow_redirects=True)
     login_resp.raise_for_status()
 
     m = re.search(r'"(https://signup\.live\.com/signup[^"]+)"', login_resp.text)
     if not m:
-        raise RuntimeError("登录页未找到 signup 链接，可能 OAuth 参数有误")
+        raise RuntimeError("登录页未找到注册入口，授权参数可能有误")
 
     signup_link = m.group(1).replace("\\u0026", "&").replace("\\/", "/")
     logger.info("加载注册页…")
@@ -105,7 +105,7 @@ def bootstrap_session(http: OutlookHttpSession, *, mkt: str = DEFAULT_MKT, lc: s
         raise RuntimeError("ServerData 中无 apiCanary")
 
     http.signup_ctx = ctx
-    logger.info("会话就绪 uaid=%s opid=%s", ctx.uaid, ctx.opid)
+    logger.info("会话就绪")
     return ctx
 
 
@@ -121,10 +121,11 @@ def preload_perimeterx(http: OutlookHttpSession, ctx: SignupSession) -> None:
         f"{PX_COLLECTOR_BASE}/api/v2/msft/beacon",
         f"{PX_COLLECTOR_BASE}/assets/js/bundle",
     ]
+    logger.info("预加载安全组件…")
     for url in urls:
         if not url:
             continue
-        logger.info("PX 预加载: %s", url[:100])
+        logger.debug("PX 预加载: %s", url[:100])
         try:
             http.get(url, headers={"Referer": ctx.signup_page_url})
         except Exception as exc:
@@ -157,7 +158,7 @@ def preload_px_challenge_assets(
     for url in urls:
         if not url:
             continue
-        logger.info("挑战资源: %s", url[:100])
+        logger.debug("挑战资源: %s", url[:100])
         try:
             http.get(url, headers={"Referer": ctx.signup_page_url})
         except Exception as exc:

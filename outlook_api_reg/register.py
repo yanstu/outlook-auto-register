@@ -110,7 +110,7 @@ def _register_attempt(
             country=country,
         ))
 
-    logger.info("阶段耗时(s): %s", timings)
+    logger.info("各阶段耗时：%s", timings)
 
     # 产出前自检：确认这枚令牌真能读信（只授 IMAP/POP/SMTP 的新号会 401 → 废号）。
     # 用与注册同一条代理，避免读信 IP 与建号 IP 不一致。
@@ -126,8 +126,8 @@ def _register_attempt(
         )
         if mail_check.get("readable"):
             logger.info(
-                "✅ 产出自检：令牌可读信 resource=%s /me=%s name=%s",
-                mail_check.get("resource"), mail_check.get("status"), mail_check.get("display_name"),
+                "✅ 产出自检：令牌可读信 name=%s",
+                mail_check.get("display_name"),
             )
         else:
             logger.warning(

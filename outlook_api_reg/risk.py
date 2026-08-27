@@ -40,7 +40,7 @@ def load_human_sensor(http: OutlookHttpSession, ctx: SignupSession) -> None:
     url = ctx.human_sensor_url
     if not url:
         return
-    logger.info("加载 humanSensorUrl…")
+    logger.info("加载安全检测…")
     http.get(url, headers={"Referer": ctx.signup_page_url})
 
 
@@ -92,10 +92,10 @@ def _poll_captcha_run_press(
 
     stable_vid = str(challenge_meta.get("vid", ""))
     if not task.silent_fetched:
-        logger.info("captcha.run press 前补拉 silent（同 task=%s）", task.task_id)
+        logger.debug("captcha.run press 前补拉 silent（同 task=%s）", task.task_id)
         poll_captcha_run_token(task, "silent")
 
-    logger.info(
+    logger.debug(
         "captcha.run GET press task=%s challenge_uuid=%s vid=%s",
         task.task_id,
         challenge_meta.get("uuid", ""),
@@ -109,7 +109,7 @@ def _poll_captcha_run_press(
         )
     px3 = solved.get("px3", "")
     if ":1000:" not in px3:
-        logger.warning("pressToken px3 无 :1000: 段（HAR verify#2 成功样本均含 :1000:）")
+        logger.debug("pressToken px3 无 :1000: 段（HAR verify#2 成功样本均含 :1000:）")
     return http.apply_px_tokens(solved, preserve_vid=stable_vid)
 
 
@@ -127,11 +127,11 @@ def _solve_via_bitbrowser(
     from bit_px_solver import harvest  # noqa: E402
 
     p = proxy or http.proxy
-    logger.info("PX 走比特浏览器收割 phase=%s（同 IP=%s）", phase, str(p)[:40])
+    logger.debug("PX 走比特浏览器收割 phase=%s（同 IP=%s）", phase, str(p)[:40])
     sol = harvest(p, want_press=(phase == "press"))
     if not sol.get("px3"):
         raise RuntimeError(f"比特浏览器未收割到 _px3 phase={phase}")
-    logger.info("比特收割成功 px3=%s... pressed=%s", sol["px3"][:30], sol.get("pressed"))
+    logger.debug("比特收割成功 px3=%s... pressed=%s", sol["px3"][:30], sol.get("pressed"))
     return http.apply_px_tokens(
         {"px3": sol["px3"], "pxde": sol.get("pxde", ""), "pxvid": sol.get("pxvid", "")},
         preserve_vid=stable_vid or sol.get("pxvid", ""),
@@ -148,7 +148,8 @@ def _solve_px_protocol(
     country: str = "US",
 ) -> dict[str, str]:
     prefer = "silent" if phase == "silent" else "press"
-    logger.info("纯协议打码 phase=%s prefer=%s", phase, prefer)
+    logger.info("人机验证进行中")
+    logger.debug("纯协议打码 phase=%s prefer=%s", phase, prefer)
 
     if os.environ.get("PX_SOLVER", "").strip().lower() == "bitbrowser":
         _meta = challenge_meta or ctx.px_challenge_meta
@@ -166,7 +167,8 @@ def _solve_px_protocol(
         if task:
             solved = poll_captcha_run_token(task, "silent")
             if solved and solved.get("px3"):
-                logger.info("captcha.run silent 成功（task=%s）", task.task_id)
+                logger.info("人机验证通过")
+                logger.debug("captcha.run silent 成功（task=%s）", task.task_id)
                 return http.apply_px_tokens(solved, preserve_vid=stable_vid)
     elif phase == "press":
         try:
@@ -177,7 +179,8 @@ def _solve_px_protocol(
             fallback = os.environ.get("PX_PRESS_FALLBACK", "").strip().lower()
             if fallback not in {"1", "true", "ez", "ezcaptcha", "capsolver", "auto"}:
                 raise
-            logger.warning("captcha.run press 失败，走 PX_PRESS_FALLBACK=%s: %s", fallback, exc)
+            logger.warning("打码服务失败，改用备用方案")
+            logger.debug("captcha.run press 失败，走 PX_PRESS_FALLBACK=%s: %s", fallback, exc)
 
     if phase == "silent":
         solved = solve_perimeterx(sctx, prefer_mode="silent")
@@ -205,7 +208,7 @@ def _acquire_silent_px(
     """risk/verify #1 的 silent px：纯协议 captcha.run silent。"""
     px = http.px_cookies()
     if px.get("px3") and not force_fresh:
-        logger.info("silent px 复用已有 cookie")
+        logger.debug("silent px 复用已有 cookie")
         return px
 
     return _solve_px_protocol(http, ctx, phase="silent", proxy=proxy, country=country)
@@ -259,8 +262,9 @@ def _protocol_verify2(
                 challenge_type=challenge_type,
             )
             state = resp2.get("state", "")
-            logger.info("纯协议 verify #2 attempt=%s state=%s", attempt, state)
+            logger.debug("纯协议 verify #2 attempt=%s state=%s", attempt, state)
             if state == "continue":
+                logger.info("人机验证通过")
                 return True
             logger.debug("verify #2 body keys=%s", list(resp2.keys()))
             nxt = resp2.get("challengeDetails", {}).get("challengeMetadata", {})
@@ -268,14 +272,14 @@ def _protocol_verify2(
                 meta = nxt
                 ctx.px_challenge_meta = meta
         except RuntimeError as exc:
-            logger.warning("纯协议 press 打码失败 attempt=%s: %s", attempt, exc)
+            logger.warning("人机验证打码失败: %s", exc)
         except requests.HTTPError as exc:
             if exc.response is not None and exc.response.status_code == 403:
-                logger.error("纯协议 verify #2 403 riskBlock")
+                logger.error("人机验证被拦截，将换出口重试")
                 return False
             raise
         except (requests.Timeout, requests.ConnectionError) as exc:
-            logger.warning("纯协议 verify #2 网络异常 attempt=%s: %s", attempt, exc)
+            logger.warning("人机验证网络异常: %s", exc)
         time.sleep(2.0)
     return False
 
@@ -300,7 +304,7 @@ def _verify2_with_retry(
             )
         except (requests.Timeout, requests.ConnectionError) as exc:
             last_exc = exc
-            logger.warning("verify #2 请求超时/断连 retry=%s/%s: %s", i, retries, exc)
+            logger.warning("人机验证请求超时，重试 %s/%s: %s", i, retries, exc)
             time.sleep(3.0)
     if last_exc:
         raise last_exc
@@ -317,7 +321,8 @@ def solve_risk_challenge(
 ) -> None:
     """风控链（纯协议 only）：silent 打码 → verify #1 → press 打码 → verify #2。"""
     init = risk_initialize(http, ctx, "")
-    logger.info("risk/initialize state=%s", init.get("state"))
+    logger.info("初始化完成")
+    logger.debug("risk/initialize state=%s", init.get("state"))
 
     if ctx.human_sensor_url:
         load_human_sensor(http, ctx)
@@ -347,8 +352,9 @@ def solve_risk_challenge(
         raise
 
     state = resp1.get("state", "")
-    logger.info("risk/verify #1 state=%s", state)
+    logger.debug("risk/verify #1 state=%s", state)
     if state == "continue":
+        logger.info("人机验证通过")
         return
     if state != "riskChallengeRequired":
         raise RuntimeError(f"risk/verify #1 未预期状态: {state}")

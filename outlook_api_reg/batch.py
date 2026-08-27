@@ -141,15 +141,13 @@ def register_batch_iter(
             logger.info("代理池批量：%d 条代理已按池策略分配。", count)
     elif proxy and not has_sid_template(proxy):
         logger.warning(
-            "代理未含 {sid} 占位符：全批 %d 个账号将共用同一出口 IP —— 同 IP 批量注册是"
-            "最强封号信号。强烈建议改用带 {sid} 的住宅/移动代理模板"
-            "（如 host:port:user:pass-US-{sid}），实现一号一 IP。",
+            "当前代理会使本批 %d 个账号共用同一出口，容易被一起拦截。请改用独立出口。",
             count,
         )
     elif proxy_unique:
-        logger.info("防封·一号一 IP：已为 %d 个账号各分配唯一 {sid} 会话（出口 IP 互不相同）。", count)
+        logger.info("独立出口：已为 %d 个账号各分配独立出口。", count)
     if jmax > 0:
-        logger.info("防封·启动错峰：相邻账号注册随机间隔 %.1f–%.1f 秒启动。", jmin, jmax)
+        logger.info("启动间隔：相邻账号注册随机间隔 %.1f–%.1f 秒启动。", jmin, jmax)
 
     yield {
         "type": "start",
@@ -253,8 +251,7 @@ def register_batch_iter(
     avg_stage = {k: round(stage_sum[k] / stage_n[k], 2) for k in stage_sum if stage_n.get(k)}
     if ok:
         logger.info(
-            "防封·冷启动：本批 %d 个新号已入库，请勿立刻测活/保活/刷 token —— 新号刚注册就高频"
-            "调用会加风控信号，建议静置数小时后再首次校验，保活低频（每号每 2–3 天一次）。",
+            "本批 %d 个新号已入库，请勿立刻测活。建议静置数小时后再首次校验。",
             ok,
         )
     yield {
@@ -296,7 +293,7 @@ def register_batch(
     proxy_plan = _plan_proxies(proxy, count)
     if proxy and not has_sid_template(proxy):
         logger.warning(
-            "代理未含 {sid} 占位符：全批 %d 个账号将共用同一出口 IP（同 IP 批量=最强封号信号）。", count
+            "当前代理会使本批 %d 个账号共用同一出口，容易被一起拦截。", count
         )
     gate = _make_launch_gate(jmin, jmax)
     if on_progress:

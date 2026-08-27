@@ -527,6 +527,76 @@ class Job:
         }
 
 
+# 引擎 INFO/WARNING/ERROR 会经本 handler 进网页「注册日志」；先丢内部调试，再改业务用语。
+_SSE_LOG_DISCARD = (
+    "HAR",
+    "已 dump",
+    "credentialaction",
+    "frmAddProof",
+    "canary",
+    "iOttText",
+    "urlPost",
+    "对齐 Outlook",
+    "/me=",
+    "uaid=",
+    "opid=",
+    "verify #",
+    "attempt=",
+    "body=%s",
+    "body=",
+    "px3=",
+    "task_id=",
+    "$Config",
+    "slt 登录完成 status=",
+    "构造 POST",
+    "fido/create",
+)
+
+# 长词在前，避免被短词先替换（如 mail OAuth → 读信授权，再轮到 OAuth）。
+_SSE_LOG_REPLACEMENTS = (
+    ("mail OAuth", "读信授权"),
+    ("token 交换", "换取令牌"),
+    ("refresh_token", "读信令牌"),
+    ("risk/initialize", "初始化"),
+    ("risk/verify", "人机验证"),
+    ("captcha.run", "打码服务"),
+    ("coolhs-mail", "恢复邮箱"),
+    ("invalid_grant", "令牌失效"),
+    ("防封·一号一 IP", "独立出口"),
+    ("防封·启动错峰", "启动间隔"),
+    ("阶段耗时(s):", "各阶段耗时："),
+    ("AddProof", "绑定恢复邮箱"),
+    ("VerifyProof", "验证恢复邮箱"),
+    ("SQLite", "账号库"),
+    ("OAuth", "授权"),
+    ("proofs", "安全验证"),
+    ("OTT", "验证码"),
+)
+
+_SSE_URL_RE = re.compile(r"https?://\S+")
+
+
+def _sanitize_sse_log(msg: str) -> Optional[str]:
+    """净化引擎日志：内部调试行返回 None（不推送），其余替换后推送。"""
+    if msg is None:
+        return None
+    text = str(msg)
+    if not text.strip():
+        return None
+    if any(marker in text for marker in _SSE_LOG_DISCARD):
+        return None
+    for old, new in _SSE_LOG_REPLACEMENTS:
+        if old in text:
+            text = text.replace(old, new)
+
+    def _shorten_url(m: re.Match[str]) -> str:
+        return "…" if len(m.group(0)) > 40 else m.group(0)
+
+    text = _SSE_URL_RE.sub(_shorten_url, text)
+    text = text.strip()
+    return text or None
+
+
 class _JobLogHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:  # noqa: D401
         if not (record.name == "outlook_api_reg" or record.name.startswith("outlook_api_reg.")):
@@ -541,7 +611,10 @@ class _JobLogHandler(logging.Handler):
             msg = record.getMessage()
         except Exception:  # noqa: BLE001
             msg = str(record.msg)
-        job.push_log(record.levelname, msg)
+        clean = _sanitize_sse_log(msg)
+        if clean is None:
+            return
+        job.push_log(record.levelname, clean)
 
 
 def _install_log_handler() -> None:
