@@ -205,11 +205,16 @@ def finish_after_proofs(
                     "CF 域名恢复邮箱后端未配置：需 OUTLOOK_CF_WORKER_API_URL + "
                     "OUTLOOK_CF_WORKER_ADMIN_TOKEN + OUTLOOK_CF_DOMAIN。proofs 无法绑定恢复邮箱。"
                 )
+            elif backend == "coolhs_mail":
+                info["note"] = (
+                    "coolhs-mail 恢复邮箱后端未配置：需 COOLHS_MAIL_BASE_URL + "
+                    "COOLHS_MAIL_API_TOKEN + COOLHS_MAIL_DOMAIN。proofs 无法绑定恢复邮箱。"
+                )
             else:
                 info["note"] = (
                     "外部恢复邮箱池未配置：需 OUTLOOK_EXTERNAL_RECOVERY_POOL_FILE(每行 email----password) "
                     "+ OUTLOOK_RECOVERY_IMAP_HOST。proofs 无法绑定恢复邮箱。"
-                    "（或设 OUTLOOK_RECOVERY_BACKEND=cf_domain 走 CF 域名邮箱）"
+                    "（或设 OUTLOOK_RECOVERY_BACKEND=coolhs_mail / cf_domain）"
                 )
             log("⚠️ %s", info["note"])
             return info

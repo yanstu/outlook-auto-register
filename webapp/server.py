@@ -52,6 +52,7 @@ from outlook_api_reg import mail_reader
 from outlook_api_reg import graph_mail, enable_imap, post_register
 from outlook_api_reg import constants as reg_constants
 from outlook_api_reg import cf_domain_mail
+from outlook_api_reg import coolhs_mail
 from outlook_api_reg import proxy_pool
 from outlook_api_reg import external_recovery_pool as ext_recovery_pool
 from outlook_api_reg import register as reg_module
@@ -1108,14 +1109,20 @@ def _startup_log() -> None:
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("SQLite 初始化失败: %s", exc)
-    if cf_domain_mail.cf_domain_backend_active() and cf_domain_mail.cf_configured():
+    if coolhs_mail.coolhs_backend_active() and coolhs_mail.coolhs_configured():
+        logging.getLogger(__name__).info(
+            "proofs 收码后端: coolhs-mail %s (%s)",
+            coolhs_mail.load_config().domain,
+            coolhs_mail.load_config().base_url,
+        )
+    elif cf_domain_mail.cf_domain_backend_active() and cf_domain_mail.cf_configured():
         logging.getLogger(__name__).info(
             "proofs 收码后端: CF 域名 %s", cf_domain_mail.load_config().domain
         )
     elif not ext_recovery_pool.external_pool_enabled():
         logging.getLogger(__name__).warning(
-            "恢复邮箱未配置：请设置 OUTLOOK_RECOVERY_BACKEND=cf_domain（your-cf-domain.com）"
-            "或 OUTLOOK_EXTERNAL_RECOVERY_POOL_FILE + OUTLOOK_RECOVERY_IMAP_HOST"
+            "恢复邮箱未配置：请设置 OUTLOOK_RECOVERY_BACKEND=coolhs_mail"
+            "（COOLHS_MAIL_*）或 cf_domain，或 IMAP 池 OUTLOOK_EXTERNAL_RECOVERY_POOL_FILE"
         )
 
 
@@ -1130,13 +1137,14 @@ def get_config() -> JSONResponse:
     proxy = ""
     captcha_key = (os.environ.get("CAPTCHA_RUN_API_KEY") or app_db.get_setting("CAPTCHA_RUN_API_KEY") or "").strip()
     cf_active = cf_domain_mail.cf_domain_backend_active() and cf_domain_mail.cf_configured()
+    coolhs_active = coolhs_mail.coolhs_backend_active() and coolhs_mail.coolhs_configured()
     recovery_pool_configured = ext_recovery_pool.external_pool_enabled()
-    recovery_configured = cf_active or recovery_pool_configured
+    recovery_configured = cf_active or coolhs_active or recovery_pool_configured
     recovery_backend = cf_domain_mail.recovery_backend()
     env_mode = DEFAULT_TOKEN_MODE
     if env_mode in ("login_exe", "recovery"):
         default_product = "graph_recovery"
-    elif cf_active or env_mode == "graph":
+    elif cf_active or coolhs_active or env_mode == "graph":
         default_product = "graph_recovery"
     else:
         default_product = "graph"
@@ -1166,6 +1174,7 @@ def get_config() -> JSONResponse:
             "export_formats": EXPORT_FORMATS,
             "recovery_pool_configured": recovery_pool_configured,
             "cf_domain_configured": cf_active,
+            "coolhs_mail_configured": coolhs_active,
             "recovery_backend": recovery_backend,
             "recovery_configured": recovery_configured,
             "proxy_pool": proxy_pool.pool_stats(),

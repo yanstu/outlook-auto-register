@@ -459,6 +459,7 @@ def satisfy_proofs_with_external(
     收码后端由 OUTLOOK_RECOVERY_BACKEND 切换：
       imap（默认） — login.exe 同款第三方 IMAP 恢复邮箱池（your-recovery-host.com 等）。
       cf_domain    — Cloudflare 域名 catch-all 邮箱：按需生成 xxxx@域名，经 CF Worker API 收码。
+      coolhs_mail  — 自建 coolhs-mail（hook.coolhs.com）：按需生成 @mail.coolhs.com，经 HTTP API 收码。
     """
     from . import external_recovery_pool as ext_pool
 
@@ -474,8 +475,14 @@ def satisfy_proofs_with_external(
     add_canary = add_form["fields"].get("canary", "")
     referer = resp.url or add_action
 
-    if ext_pool.recovery_backend() == "cf_domain":
+    backend = ext_pool.recovery_backend()
+    if backend == "cf_domain":
         return _satisfy_proofs_cf_domain(
+            http, add_action=add_action, add_canary=add_canary, referer=referer,
+            max_accounts=max_accounts, country=country,
+        )
+    if backend == "coolhs_mail":
+        return _satisfy_proofs_coolhs_mail(
             http, add_action=add_action, add_canary=add_canary, referer=referer,
             max_accounts=max_accounts, country=country,
         )
@@ -586,6 +593,65 @@ def _satisfy_proofs_cf_domain(
             logger.info("proofs 外部恢复邮箱(CF域名)绑定成功 → %s", address)
             return r_next, meta
     logger.error("CF 域名恢复邮箱均未能满足 proofs（%d 次尝试）", max_accounts)
+    return None
+
+
+def _satisfy_proofs_coolhs_mail(
+    http: OutlookHttpSession,
+    *,
+    add_action: str,
+    add_canary: str,
+    referer: str,
+    max_accounts: int,
+    country: str,
+) -> Optional[tuple[requests.Response, dict[str, str]]]:
+    """coolhs-mail 恢复邮箱后端：按需生成 @mail.coolhs.com + HTTP API 收码。"""
+    from . import coolhs_mail
+
+    try:
+        client = coolhs_mail.CoolhsMailClient()
+    except Exception as exc:  # noqa: BLE001
+        logger.error("coolhs-mail 后端初始化失败：%s", exc)
+        return None
+
+    placeholder = coolhs_mail.recovery_placeholder()
+    try:
+        max_try = int(os.environ.get("OUTLOOK_COOLHS_PROOF_MAX_ACCOUNTS", str(max_accounts)))
+    except ValueError:
+        max_try = max_accounts
+    for _i in range(max(1, max_try)):
+        try:
+            address = coolhs_mail.allocate_address(client)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("coolhs-mail 分配地址失败：%s", exc)
+            return None
+        logger.info("proofs 外部恢复邮箱(coolhs-mail)：分配 %s", address)
+
+        try:
+            before_ids = client.snapshot_ids(address)
+        except Exception:  # noqa: BLE001
+            before_ids = set()
+
+        def _read(addr=address, bids=before_ids):
+            return client.read_security_code(
+                addr, since_ts=time.time() - 30, before_ids=bids, timeout=150,
+            )
+
+        r_next = _do_proof_round(
+            http, add_action=add_action, add_canary=add_canary, referer=referer,
+            recovery_email=address, country=country, read_code=_read,
+            log_label=address, tag="afterproof_coolhs",
+        )
+        if r_next is not None:
+            meta = {
+                "proofs_method": "coolhs_mail_recovery",
+                "recovery_email": address,
+                "recovery_password": placeholder,
+                "proofs_satisfied": "true",
+            }
+            logger.info("proofs 外部恢复邮箱(coolhs-mail)绑定成功 → %s", address)
+            return r_next, meta
+    logger.error("coolhs-mail 恢复邮箱均未能满足 proofs（%d 次尝试）", max_accounts)
     return None
 
 
