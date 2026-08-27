@@ -429,7 +429,7 @@
                     <label class="switch" style="margin-bottom:8px;"><input type="checkbox" id="useProxyPool" checked /> 使用代理池（按账号分配）</label>
                     <input type="text" id="proxy" placeholder="备用代理，例如 host:port:user:pass" autocomplete="off" />
                   </label>
-                  <label class="field span-2"><span>captcha.run Key</span><input type="password" id="captchaKey" placeholder="captcha.run Bearer key" autocomplete="off" spellcheck="false" /></label>
+                  <label class="field span-2"><span>captcha.run Key</span><input type="password" id="captchaKey" placeholder="填写 captcha.run 密钥" autocomplete="off" spellcheck="false" /></label>
                 </div>
               </div>
               <div class="register-run-params">
@@ -623,7 +623,7 @@
             </div>
             <select class="pool-compact-select" id="filterView">
               <option value="all">全部状态</option>
-              <option value="usable">Graph 可用</option>
+              <option value="usable">可读信</option>
               <option value="dead">令牌失效</option>
               <option value="untested">未测活</option>
               <option value="without">无令牌</option>
@@ -685,7 +685,7 @@
           </div>
           <div id="verResult" style="margin-top:14px; display:none;">
             <div class="row" style="gap:8px; margin-bottom:8px;">
-              <span class="st wait" id="vGraph">Graph 读信</span><span class="st wait" id="vRest">Outlook REST</span><span class="st wait" id="vImap">IMAP</span>
+              <span class="st wait" id="vGraph">读信</span><span class="st wait" id="vRest">备用接口</span><span class="st wait" id="vImap">IMAP</span>
             </div>
             <div class="msgbox show" id="vSummary" style="display:block;"></div>
             <div class="hint" id="vScope" style="word-break:break-all;"></div>
@@ -895,7 +895,7 @@ function cellWithCopy(email, field, display){
 }
 function cellPassword(email, password){
   if(!password) return `<span class="rec-none">—</span>`;
-  return `<div class="cell-main"><span class="val mono pwd-mask" title="密码已隐藏，点旁复制">••••••••</span>
+  return `<div class="cell-main"><span class="val mono pwd-mask" title="密码已隐藏，点图标复制">••••••••</span>
     <button type="button" class="icon-btn" title="复制密码" data-act="copy-field" data-email="${escHtml(email)}" data-field="password">${COPY_ICON}</button></div>`;
 }
 function copyIconBtn(val){
@@ -924,8 +924,8 @@ function tokenStatusDetail(a){
   if(!v) return '<div class="detail-tok"><span class="pill na">尚未测活</span></div>';
   const pill=(label, ok, hint)=>`<span class="pill ${ok===null?'na':ok?'on':'off'}" title="${escHtml(hint||'')}">${label}${ok===null?' · 未测':ok?' · 通':' · 不通'}</span>`;
   return `<div class="detail-tok">
-    ${pill('Graph 读信', v.graph, '推荐的读信方式')}
-    ${pill('Outlook REST', v.outlook_rest, '')}
+    ${pill('读信', v.graph, '推荐的读信方式')}
+    ${pill('备用接口', v.outlook_rest, '')}
     ${v.imap!=null?pill('IMAP 登录', v.imap, '部分老账号可用'):''}
   </div>`;
 }
@@ -1029,8 +1029,8 @@ async function loadConfig(){
     const pxLabel={solver:'打码服务'};
     $('pxMode').innerHTML = c.px_modes.map(m=>`<option value="${m}">${pxLabel[m]||m}</option>`).join('');
     const products = c.product_modes || [
-      {id:'graph', label:'Graph 四段式', export:'graph', hint:''},
-      {id:'graph_recovery', label:'Graph 六段式（推荐）', export:'recovery', hint:''}
+      {id:'graph', label:'四段（读信）', export:'graph', hint:''},
+      {id:'graph_recovery', label:'六段（含恢复邮箱，推荐）', export:'recovery', hint:''}
     ];
     const defMode = c.default_token_mode || 'graph_recovery';
     $('tokenMode').innerHTML = products.map(m=>{
@@ -1043,7 +1043,7 @@ async function loadConfig(){
     $('domain').innerHTML = c.domains.map(d=>`<option>${d}</option>`).join('');
     $('country').value = c.default_country||'US';
     $('proxy').placeholder = '备用代理，例如 host:port:user:pass';
-    $('captchaKey').placeholder = 'captcha.run Key';
+    $('captchaKey').placeholder = '填写 captcha.run 密钥';
     const savedProxy = localStorage.getItem('outlook_reg_proxy');
     const savedKey = localStorage.getItem('outlook_reg_captcha_key');
     $('proxy').value = savedProxy || DEFAULT_PROXY;
@@ -1052,7 +1052,7 @@ async function loadConfig(){
     $('count').value = '1';
     $('concurrency').value = '1';
     $('cfgHint').textContent = '已填好打码 Key。默认使用代理池，池为空时请填写备用代理。';
-    const fmtLabel={graph:'四段（读信）',dual:'六段（双令牌）',recovery:'六段（含恢复邮箱）'};
+    const fmtLabel={graph:'四段（读信）',dual:'六段（双令牌）',recovery:'六段（含恢复邮箱，推荐）'};
     $('exportFmt').innerHTML = (c.export_formats||['graph']).map(f=>`<option value="${f}">${fmtLabel[f]||f}</option>`).join('');
     $('exportFmt').value = c.default_export_format || 'recovery';
     const poolN=(c.proxy_pool&&c.proxy_pool.enabled)||0;
@@ -1356,7 +1356,7 @@ async function verifyOneAccount(a){
 async function verifyRow(email){
   const a=accountByEmail(email); if(!a) return;
   const j=await verifyOneAccount(a);
-  toast(j.transient?(j.summary||'网络异常，保留原状态'):(j.summary||(j.ok?'Graph 可用':'不可用')));
+  toast(j.transient?(j.summary||'网络异常，保留原状态'):(j.summary||(j.ok?'可读信':'不可用')));
   await loadAccounts();
   return j;
 }
@@ -1391,7 +1391,7 @@ async function runBatchVerify(emails){
           verifyLog('WARNING', `[${n}] ${a.email} ${j.summary||'网络异常，保留原状态'}`);
         }
         else if(j.unable){ fail++; verifyLog('WARNING', `[${n}] ${a.email} ${j.summary}`); }
-        else if(j.ok){ ok++; verifyLog('INFO', `[${n}] ${a.email} Graph 可读信`); }
+        else if(j.ok){ ok++; verifyLog('INFO', `[${n}] ${a.email} 可读信`); }
         else {
           fail++;
           if(wasOk) died++;
@@ -1503,11 +1503,11 @@ async function verifyCombo(){
     refresh_token:$('verToken').value.trim()||null, proxy:$('verProxy').value.trim()||null, test_imap:$('verImap').checked };
   $('verifyBtn').disabled=true; $('verResult').style.display='block';
   $('vSummary').className='msgbox show warn'; $('vSummary').textContent='校验中…'; $('vScope').textContent='';
-  setStBadge($('vGraph'),'Graph 读信',null); setStBadge($('vRest'),'Outlook REST',null); setStBadge($('vImap'),'IMAP',null);
+  setStBadge($('vGraph'),'读信',null); setStBadge($('vRest'),'备用接口',null); setStBadge($('vImap'),'IMAP',null);
   try {
     const j=await jpost('/api/verify-combo',body);
-    setStBadge($('vGraph'),'Graph 读信',j.graph?j.graph.ok:null,j.graph?j.graph.status:null);
-    setStBadge($('vRest'),'Outlook REST',j.outlook_rest?j.outlook_rest.ok:null,j.outlook_rest?j.outlook_rest.status:null);
+    setStBadge($('vGraph'),'读信',j.graph?j.graph.ok:null,j.graph?j.graph.status:null);
+    setStBadge($('vRest'),'备用接口',j.outlook_rest?j.outlook_rest.ok:null,j.outlook_rest?j.outlook_rest.status:null);
     if(j.imap&&j.imap.tested) setStBadge($('vImap'),'IMAP',j.imap.ok,j.imap.ok?'OK':(j.imap.stage||'✗')); else setStBadge($('vImap'),'IMAP',null,'未测');
     $('vSummary').className='msgbox show '+(j.ok?'ok':'err'); $('vSummary').textContent=j.summary||j.message||(j.ok?'可用':'不可用');
     let scope=j.granted_scope?('授权范围: '+j.granted_scope):'';

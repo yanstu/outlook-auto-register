@@ -113,13 +113,13 @@ if "graph_recovery" not in TOKEN_MODES:
 PRODUCT_MODES = [
     {
         "id": "graph",
-        "label": "Graph 四段式",
+        "label": "四段（读信）",
         "export": "graph",
         "hint": "",
     },
     {
         "id": "graph_recovery",
-        "label": "Graph 六段式（推荐）",
+        "label": "六段（含恢复邮箱，推荐）",
         "export": "recovery",
         "hint": "",
     },
@@ -1703,9 +1703,9 @@ def _verify_one(email: str, refresh_token: str, proxy_url: str, test_imap: bool)
             usable.append("imap")
     res["ok"] = bool(usable)
     if "graph" in usable:
-        res["summary"] = "✅ 可用：Graph 令牌可读信（推荐）"
+        res["summary"] = "✅ 可读信"
     elif "outlook_rest" in usable:
-        res["summary"] = "✅ 可用：Outlook REST 令牌可读信"
+        res["summary"] = "✅ 备用接口可读信"
     elif res["imap"].get("ok"):
         res["summary"] = "⚠️ 仅 IMAP 可用"
     else:
