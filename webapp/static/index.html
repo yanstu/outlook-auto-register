@@ -534,7 +534,7 @@
                 <th>标签</th>
                 <th style="width:100px;">代理商</th>
                 <th style="width:52px;">国家</th>
-                <th>模板（脱敏）</th>
+                <th>代理</th>
                 <th style="width:56px;">独立会话</th>
                 <th style="width:72px;">状态</th>
                 <th style="width:110px;">出口 IP</th>
@@ -547,10 +547,10 @@
             </table>
           </div>
           <div class="card pad" style="margin-top:12px;">
-            <h2 style="margin-bottom:10px;">账号绑定 <span class="hint" style="font-weight:400;">（注册/重登成功后自动写入）</span></h2>
+            <h2 style="margin-bottom:10px;">账号绑定</h2>
             <div class="tbl-wrap">
               <table>
-                <thead><tr><th>邮箱</th><th>代理</th><th>会话（脱敏）</th><th>用途</th><th>绑定时间</th><th style="width:72px;">操作</th></tr></thead>
+                <thead><tr><th>邮箱</th><th>代理</th><th>会话</th><th>用途</th><th>绑定时间</th><th style="width:72px;">操作</th></tr></thead>
                 <tbody id="proxyBindBody"><tr><td colspan="6" class="empty">暂无绑定</td></tr></tbody>
               </table>
             </div>
@@ -1026,7 +1026,8 @@ async function syncProxyToDb(text, provider='web'){
 async function loadConfig(){
   try {
     const c = await (await api('/api/config')).json(); CFG=c;
-    $('pxMode').innerHTML = c.px_modes.map(m=>`<option>${m}</option>`).join('');
+    const pxLabel={solver:'打码服务'};
+    $('pxMode').innerHTML = c.px_modes.map(m=>`<option value="${m}">${pxLabel[m]||m}</option>`).join('');
     const products = c.product_modes || [
       {id:'graph', label:'Graph 四段式', export:'graph', hint:''},
       {id:'graph_recovery', label:'Graph 六段式（推荐）', export:'recovery', hint:''}
