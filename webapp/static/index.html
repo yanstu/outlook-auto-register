@@ -742,6 +742,13 @@
       <div class="hint" style="margin-top:0;">每行一条。四段为邮箱、密码、应用编号、读信令牌；六段可另附恢复邮箱或第二枚令牌。按邮箱去重。</div>
       <div style="margin:12px 0;"><input type="file" id="importFile" accept=".txt,.csv" /></div>
       <textarea id="importText" rows="9" placeholder="邮箱----密码----应用编号----读信令牌"></textarea>
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+        <div class="hint" style="margin-top:0;">已经有一批现成的邮箱？可以直接从 qoderji 拉取，不用手动粘贴。</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+          <input type="number" id="qoderjiLimit" placeholder="拉取数量上限（留空=全部）" style="flex:1;" min="1" />
+          <button class="btn" id="qoderjiImportDo">从 qoderji 拉取</button>
+        </div>
+      </div>
     </div>
     <div class="modal-f">
       <button class="btn ghost" id="importCancel">取消</button>
@@ -1507,6 +1514,18 @@ $('importDo').onclick=async()=>{ const text=$('importText').value; if(!text.trim
   const j=await jpost('/api/accounts/import',{text});
   toast(`导入 ${j.imported}（其中 6 段 ${j.six_seg||0}），重复 ${j.duplicate}，无效 ${j.invalid}`);
   $('importModal').classList.remove('show'); $('importText').value=''; $('importFile').value=''; loadAccounts(); };
+$('qoderjiImportDo').onclick=async()=>{
+  const limitRaw=$('qoderjiLimit').value.trim();
+  const body={}; if(limitRaw) body.limit=parseInt(limitRaw,10);
+  const btn=$('qoderjiImportDo'); btn.disabled=true; btn.textContent='拉取中…';
+  try{
+    const r=await fetch('/api/accounts/import/qoderji',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const j=await r.json();
+    if(!r.ok){ toast(j.detail||'拉取失败：未找到 qoderji 邮箱库'); return; }
+    toast(`从 qoderji 导入 ${j.imported}，重复 ${j.duplicate}，无效 ${j.invalid}`);
+    $('importModal').classList.remove('show'); $('qoderjiLimit').value=''; loadAccounts();
+  } finally { btn.disabled=false; btn.textContent='从 qoderji 拉取'; }
+};
 
 function setStBadge(el,label,state,status){ const cls=state===true?'ok':(state===false?'err':'wait');
   const suf=(status===undefined||status===null)?(state===true?'✓':(state===false?'✗':'—')):status;

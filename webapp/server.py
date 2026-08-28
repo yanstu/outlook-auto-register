@@ -66,6 +66,7 @@ from outlook_api_reg import proxy_pool
 from outlook_api_reg import external_recovery_pool as ext_recovery_pool
 from outlook_api_reg import register as reg_module
 from outlook_api_reg import mailbox_gateway
+from outlook_api_reg import external_import
 
 load_dotenv()
 
@@ -1245,6 +1246,19 @@ class VerifyBatchRequest(BaseModel):
 
 class ImportRequest(BaseModel):
     text: str = ""
+    source: str = ""
+    batch_label: str = ""
+    skip_incubation: bool = False
+
+
+class QoderjiImportRequest(BaseModel):
+    db_path: Optional[str] = None
+    statuses: Optional[list[str]] = None
+    batch_id: Optional[str] = None
+    limit: Optional[int] = None
+    batch_label: str = ""
+    skip_incubation: bool = True
+    dry_run: bool = False
 
 
 class ExportRequest(BaseModel):
@@ -1747,78 +1761,50 @@ def export_accounts(req: ExportRequest) -> PlainTextResponse:
 
 @app.post("/api/accounts/import")
 def import_accounts(req: ImportRequest) -> JSONResponse:
-    """自动识别 4 段/6 段：均写入 accounts.txt（graph 四段）；6 段额外写 accounts_dual.txt
-    并把登录令牌存进 meta，便于之后 6 段导出。按邮箱去重、校验字段。"""
-    existing = {r["email"] for r in _load_accounts()}
-    imported = duplicate = invalid = six_seg = 0
-    seen: set[str] = set()
-    graph_lines: list[str] = []
-    dual_lines: list[str] = []
-    dual_meta: dict[str, dict[str, str]] = {}
-    for raw in (req.text or "").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        parts = line.split("----")
-        if len(parts) < 4:
-            invalid += 1
-            continue
-        email = parts[0].strip()
-        if not email or "@" not in email:
-            invalid += 1
-            continue
-        if email in existing or email in seen:
-            duplicate += 1
-            continue
-        seen.add(email)
-        graph_lines.append("----".join(parts[:4]))
-        imported += 1
-        # 6 段：email----pwd----graph_cid----graph_rt----login_cid----login_rt
-        if len(parts) >= 6 and parts[4].strip() and parts[5].strip():
-            six = "----".join(parts[:6])
-            dual_lines.append(six)
-            dual_meta[email] = {
-                "combo_dual": six,
-                "login_client_id": parts[4].strip(),
-                "login_refresh_token": parts[5].strip(),
-            }
-            six_seg += 1
-    if graph_lines or dual_lines:
-        now = datetime.now().isoformat()
-        with _save_lock:
-            conn = app_db.connect()
-            try:
-                for ln in graph_lines:
-                    parts = ln.split("----")
-                    if len(parts) < 4:
-                        continue
-                    email = parts[0].strip()
-                    dual = dual_meta.get(email, {})
-                    account_store.upsert_account_dict(conn, {
-                        "email": email,
-                        "password": parts[1],
-                        "client_id": parts[2],
-                        "refresh_token": parts[3],
-                        "combo": ln,
-                        "combo_dual": dual.get("combo_dual", ""),
-                        "login_client_id": dual.get("login_client_id", ""),
-                        "login_refresh_token": dual.get("login_refresh_token", ""),
-                        "success": True,
-                        "created_at": now,
-                        "updated_at": now,
-                        "batch_id": "import",
-                        "batch_label": "导入",
-                        "legacy_source": "import",
-                    })
-                conn.commit()
-            finally:
-                conn.close()
-    for email, patch in dual_meta.items():
-        _update_meta(email, patch)
-    return JSONResponse(
-        {"ok": True, "imported": imported, "duplicate": duplicate,
-         "invalid": invalid, "six_seg": six_seg}
+    """粘贴导入：自动识别 4 段（graph）/ 6 段（末两段为登录令牌）combo，按邮箱去重。
+
+    ``source`` / ``batch_label`` / ``skip_incubation`` 均可选，供自有资产合并场景
+    （如从其他系统批量搬号）标记来源、跳过新号 48h 孵化期；不传时行为与老版本一致
+    （created_at=当前时间，仍受孵化期限制）。
+    """
+    result = external_import.import_text(
+        req.text,
+        source=req.source,
+        batch_label=req.batch_label,
+        skip_incubation=req.skip_incubation,
     )
+    return JSONResponse({
+        "ok": True,
+        "imported": result["imported"],
+        "duplicate": result["duplicate"],
+        "invalid": result["invalid"],
+        "six_seg": result["six_seg"],
+        "source": result["source"],
+        "batch_label": result["batch_label"],
+        "skip_incubation": result["skip_incubation"],
+    })
+
+
+@app.post("/api/accounts/import/qoderji")
+def import_accounts_qoderji(req: QoderjiImportRequest) -> JSONResponse:
+    """从 qoderji（同机 /opt/qoderji，另一套系统）的 email_inventory 拉取已注册好的
+    Outlook combo 并入本地账号库。只读查询 qoderji 的 SQLite，从不写回。
+
+    默认排除 ``status=dead``（OAuth 永久失效）的行；默认 ``skip_incubation=True``，
+    这些号早已存活过一段时间，不需要再走本地新号的孵化期。
+    """
+    result = external_import.import_from_qoderji(
+        db_path=req.db_path,
+        statuses=tuple(req.statuses) if req.statuses else external_import.DEFAULT_QODERJI_STATUSES,
+        batch_id=req.batch_id,
+        limit=req.limit,
+        batch_label=req.batch_label,
+        skip_incubation=req.skip_incubation,
+        dry_run=req.dry_run,
+    )
+    if not result.get("ok"):
+        raise HTTPException(status_code=404, detail=result.get("error") or "未找到 qoderji 邮箱库")
+    return JSONResponse(result)
 
 
 @app.post("/api/accounts/delete")
