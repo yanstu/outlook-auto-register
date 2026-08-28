@@ -69,7 +69,8 @@ class ConsoleAuthTest(unittest.TestCase):
     def test_login_page_is_public(self):
         r = self.client.get("/login.html")
         self.assertEqual(r.status_code, 200)
-        self.assertIn("Outlook 注册控制台", r.text)
+        self.assertIn("信匣台", r.text)
+        self.assertIn("/static/assets/logo.png", r.text)
 
     # ---- 未登录 ----------------------------------------------------------
     def test_console_page_redirects_to_login(self):
