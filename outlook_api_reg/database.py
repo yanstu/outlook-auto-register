@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 _lock = threading.Lock()
 _initialized = False
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS app_meta (
@@ -142,6 +142,45 @@ CREATE TABLE IF NOT EXISTS rescue_events (
     created_at TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS api_principals (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL DEFAULT 'service',
+    name TEXT NOT NULL DEFAULT '',
+    secret_hash TEXT NOT NULL DEFAULT '',
+    scopes TEXT NOT NULL DEFAULT '',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT '',
+    expires_at TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS api_grants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    principal_id TEXT NOT NULL,
+    email TEXT NOT NULL DEFAULT '' COLLATE NOCASE,
+    scopes_override TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS api_sessions (
+    id TEXT PRIMARY KEY,
+    token_hash TEXT NOT NULL DEFAULT '',
+    principal_id TEXT NOT NULL DEFAULT '',
+    email TEXT NOT NULL DEFAULT '' COLLATE NOCASE,
+    expires_at TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS api_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL DEFAULT '',
+    principal_id TEXT NOT NULL DEFAULT '',
+    method TEXT NOT NULL DEFAULT '',
+    path TEXT NOT NULL DEFAULT '',
+    email TEXT NOT NULL DEFAULT '',
+    status INTEGER NOT NULL DEFAULT 0,
+    detail TEXT NOT NULL DEFAULT ''
+);
+
 CREATE INDEX IF NOT EXISTS idx_accounts_batch ON accounts(batch_label);
 CREATE INDEX IF NOT EXISTS idx_accounts_created ON accounts(created_at);
 CREATE INDEX IF NOT EXISTS idx_proxies_enabled ON proxies(enabled);
@@ -152,7 +191,88 @@ CREATE INDEX IF NOT EXISTS idx_bindings_proxy_id ON proxy_bindings(proxy_id);
 CREATE INDEX IF NOT EXISTS idx_proxy_events_provider ON proxy_events(provider, country);
 CREATE INDEX IF NOT EXISTS idx_proxy_events_proxy_id ON proxy_events(proxy_id);
 CREATE INDEX IF NOT EXISTS idx_rescue_events_email ON rescue_events(email);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_api_grants_unique ON api_grants(principal_id, email);
+CREATE INDEX IF NOT EXISTS idx_api_sessions_principal ON api_sessions(principal_id);
+CREATE INDEX IF NOT EXISTS idx_api_sessions_email ON api_sessions(email);
+CREATE INDEX IF NOT EXISTS idx_api_audit_ts ON api_audit(ts);
+CREATE INDEX IF NOT EXISTS idx_api_audit_principal ON api_audit(principal_id);
 """
+
+# v4 新增的 Mailbox API 表：老库升级时单独建一次，之后交给 SCHEMA_SQL 幂等维护
+MAILBOX_API_SQL = """
+CREATE TABLE IF NOT EXISTS api_principals (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL DEFAULT 'service',
+    name TEXT NOT NULL DEFAULT '',
+    secret_hash TEXT NOT NULL DEFAULT '',
+    scopes TEXT NOT NULL DEFAULT '',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT '',
+    expires_at TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS api_grants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    principal_id TEXT NOT NULL,
+    email TEXT NOT NULL DEFAULT '' COLLATE NOCASE,
+    scopes_override TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS api_sessions (
+    id TEXT PRIMARY KEY,
+    token_hash TEXT NOT NULL DEFAULT '',
+    principal_id TEXT NOT NULL DEFAULT '',
+    email TEXT NOT NULL DEFAULT '' COLLATE NOCASE,
+    expires_at TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS api_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL DEFAULT '',
+    principal_id TEXT NOT NULL DEFAULT '',
+    method TEXT NOT NULL DEFAULT '',
+    path TEXT NOT NULL DEFAULT '',
+    email TEXT NOT NULL DEFAULT '',
+    status INTEGER NOT NULL DEFAULT 0,
+    detail TEXT NOT NULL DEFAULT ''
+);
+"""
+
+_MAILBOX_API_COLUMNS = {
+    "api_principals": {
+        "kind": "TEXT NOT NULL DEFAULT 'service'",
+        "name": "TEXT NOT NULL DEFAULT ''",
+        "secret_hash": "TEXT NOT NULL DEFAULT ''",
+        "scopes": "TEXT NOT NULL DEFAULT ''",
+        "enabled": "INTEGER NOT NULL DEFAULT 1",
+        "created_at": "TEXT NOT NULL DEFAULT ''",
+        "expires_at": "TEXT NOT NULL DEFAULT ''",
+    },
+    "api_grants": {
+        "principal_id": "TEXT NOT NULL DEFAULT ''",
+        "email": "TEXT NOT NULL DEFAULT ''",
+        "scopes_override": "TEXT NOT NULL DEFAULT ''",
+        "created_at": "TEXT NOT NULL DEFAULT ''",
+    },
+    "api_sessions": {
+        "token_hash": "TEXT NOT NULL DEFAULT ''",
+        "principal_id": "TEXT NOT NULL DEFAULT ''",
+        "email": "TEXT NOT NULL DEFAULT ''",
+        "expires_at": "TEXT NOT NULL DEFAULT ''",
+        "created_at": "TEXT NOT NULL DEFAULT ''",
+    },
+    "api_audit": {
+        "ts": "TEXT NOT NULL DEFAULT ''",
+        "principal_id": "TEXT NOT NULL DEFAULT ''",
+        "method": "TEXT NOT NULL DEFAULT ''",
+        "path": "TEXT NOT NULL DEFAULT ''",
+        "email": "TEXT NOT NULL DEFAULT ''",
+        "status": "INTEGER NOT NULL DEFAULT 0",
+        "detail": "TEXT NOT NULL DEFAULT ''",
+    },
+}
 
 _FN_TS = re.compile(r"_(\d{8})_(\d{6})\.json$")
 
@@ -222,6 +342,7 @@ def set_setting(key: str, value: str) -> None:
 
 def apply_schema(conn: sqlite3.Connection) -> None:
     _migrate_schema_v3(conn)
+    _migrate_schema_v4(conn)
     conn.executescript(SCHEMA_SQL)
     _app_set(conn, "schema_version", str(SCHEMA_VERSION))
     conn.commit()
@@ -258,6 +379,18 @@ def _migrate_schema_v3(conn: sqlite3.Connection) -> None:
         cc = infer_country_from_template(row["template"] or "")
         if cc:
             conn.execute("UPDATE proxies SET country=? WHERE id=?", (cc, row["id"]))
+
+
+def _migrate_schema_v4(conn: sqlite3.Connection) -> None:
+    """增量迁移：补 Mailbox API 的 principal / grant / session / audit 四张表与缺失列。"""
+    conn.executescript(MAILBOX_API_SQL)
+    for table, columns in _MAILBOX_API_COLUMNS.items():
+        existing = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if not existing:
+            continue
+        for name, ddl in columns.items():
+            if name not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
 
 
 def backup_database(*, tag: str = "") -> Path:
