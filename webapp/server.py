@@ -58,6 +58,7 @@ from outlook_api_reg import coolhs_mail
 from outlook_api_reg import proxy_pool
 from outlook_api_reg import external_recovery_pool as ext_recovery_pool
 from outlook_api_reg import register as reg_module
+from outlook_api_reg import mailbox_gateway
 
 load_dotenv()
 
@@ -134,6 +135,12 @@ except Exception:  # noqa: BLE001
     BATCH_READY = False
 
 app = FastAPI(title="Outlook API 注册控制台", version="2.0.0")
+
+# Mailbox API v1：对外收信 / 取码 / 查字段。关掉它运维台照常工作。
+MAILBOX_API_ENABLED = mailbox_gateway.api_enabled()
+if MAILBOX_API_ENABLED:
+    app.include_router(mailbox_gateway.mailbox_router)
+    mailbox_gateway.install_error_handlers(app)
 
 _save_lock = threading.Lock()
 _meta_lock = threading.Lock()
@@ -1203,6 +1210,9 @@ def _startup_log() -> None:
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("SQLite 初始化失败: %s", exc)
+    if MAILBOX_API_ENABLED:
+        mailbox_gateway.bootstrap()
+        logger.info("Mailbox API v1 已挂载: /api/v1")
     if coolhs_mail.coolhs_backend_active() and coolhs_mail.coolhs_configured():
         logging.getLogger(__name__).info(
             "proofs 收码后端: coolhs-mail %s (%s)",
