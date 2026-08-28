@@ -49,7 +49,8 @@
     font-size:13px; font-weight:500; cursor:pointer; border:0; background:transparent; width:100%; text-align:left; margin-bottom:2px; }
   .nav:hover { background:var(--bg-hover); color:var(--fg); }
   .nav.active { background:var(--brand-soft); color:var(--brand-hover); font-weight:600; }
-  .nav .ic { width:16px; text-align:center; opacity:.9; }
+  .nav .ic { width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; opacity:.9; }
+  .nav .ic svg { width:16px; height:16px; display:block; }
   .nav .count { margin-left:auto; font-size:11px; font-family:var(--font-mono); color:var(--fg-4); }
   .nav.active .count { color:var(--brand-hover); }
   .sb-foot { margin-top:auto; border-top:1px solid var(--border); padding:12px 14px; font-size:11.5px; color:var(--fg-3); display:flex; flex-direction:column; gap:6px; }
@@ -254,7 +255,8 @@
   }
   .pool-search-field:focus-within { background:var(--bg-card); border-color:var(--brand); box-shadow:0 0 0 3px var(--brand-ring); }
   .pool-search-field input { border:0; background:transparent; box-shadow:none !important; padding:0; min-height:0; height:auto; }
-  .pool-search-icon { color:var(--fg-4); flex-shrink:0; }
+  .pool-search-icon { width:16px; height:16px; color:var(--fg-4); flex-shrink:0; display:inline-flex; }
+  .pool-search-icon svg { width:16px; height:16px; display:block; }
   .pool-compact-select { width:auto; min-width:108px; height:32px; min-height:32px; padding:0 28px 0 10px; font-size:12px; border-radius:8px; }
   .pool-toolbar-sp { flex:1; min-width:8px; }
   .sel-chip { color:var(--fg-3); font-size:12px; white-space:nowrap; flex-shrink:0; }
@@ -297,7 +299,7 @@
 
   .cell-main { display:flex; align-items:center; gap:4px; min-width:0; }
   .cell-main .val { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .pwd-mask { letter-spacing:.2em; color:var(--fg-3); user-select:none; }
+  .pwd-mask { letter-spacing:0; color:var(--fg-3); user-select:none; }
   .icon-btn {
     flex-shrink:0; width:22px; height:22px; padding:0; border:0; border-radius:6px;
     background:transparent; color:var(--fg-4); cursor:pointer; display:inline-flex; align-items:center; justify-content:center;
@@ -377,13 +379,13 @@
     </div>
     <div class="sb-group">
       <div class="sb-title">工作台</div>
-      <button class="nav active" data-sec="overview"><span class="ic">▤</span> 概览</button>
-      <button class="nav" data-sec="register"><span class="ic">✦</span> 批次注册</button>
-      <button class="nav" data-sec="proxies"><span class="ic">⇄</span> 代理池 <span class="count" id="navProxyCount">0</span></button>
-      <button class="nav" data-sec="proxy-stats"><span class="ic">◔</span> 代理统计</button>
-      <button class="nav" data-sec="pool"><span class="ic">▦</span> 账号池 <span class="count" id="navPoolCount">0</span></button>
-      <button class="nav" data-sec="verify"><span class="ic">◈</span> 测活</button>
-      <button class="nav" data-sec="ops"><span class="ic">◐</span> 保活</button>
+      <button class="nav active" data-sec="overview"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg></span> 概览</button>
+      <button class="nav" data-sec="register"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg></span> 批次注册</button>
+      <button class="nav" data-sec="proxies"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M9 6h5a4 4 0 0 1 4 4v5"/><path d="m15 12 3 3 3-3"/><path d="M15 18h-5a4 4 0 0 1-4-4V9"/></svg></span> 代理池 <span class="count" id="navProxyCount">0</span></button>
+      <button class="nav" data-sec="proxy-stats"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 16 4-5 4 3 5-7"/></svg></span> 代理统计</button>
+      <button class="nav" data-sec="pool"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 11v6c0 1.7 4 3 9 3s9-1.3 9-3v-6"/></svg></span> 账号池 <span class="count" id="navPoolCount">0</span></button>
+      <button class="nav" data-sec="verify"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3v8Z"/><path d="m9 12 2 2 4-4"/></svg></span> 测活</button>
+      <button class="nav" data-sec="ops"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2-7 4 14 2-7h6"/><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.9-8.6a5.5 5.5 0 0 0-.1-7.8Z"/></svg></span> 保活</button>
     </div>
     <div class="sb-foot">
       <div><span class="dot off" id="footDot"></span><span id="footHealth">检测中…</span></div>
@@ -618,7 +620,7 @@
         <div class="pool-page">
           <div class="pool-cockpit-toolbar">
             <div class="pool-search-field">
-              <span class="pool-search-icon">⌕</span>
+              <span class="pool-search-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
               <input type="text" id="poolSearch" placeholder="搜索邮箱" />
             </div>
             <select class="pool-compact-select" id="filterView">
@@ -855,20 +857,20 @@ function _parseIso(raw){
 }
 function fmtFullTime(raw){
   const d=_parseIso(raw);
-  if(!d) return raw ? String(raw).replace('T',' ').replace(/\.\d+/,'').slice(0,19) : '—';
+  if(!d) return raw ? String(raw).replace('T',' ').replace(/\.\d+/,'').slice(0,19) : '暂无';
   const p=n=>String(n).padStart(2,'0');
   return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 function fmtShortTime(raw){
   const d=_parseIso(raw);
-  if(!d) return raw ? String(raw).replace('T',' ').slice(5,16) : '—';
+  if(!d) return raw ? String(raw).replace('T',' ').slice(5,16) : '暂无';
   const p=n=>String(n).padStart(2,'0');
   return `${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 function fmtAge(sec){
-  if(sec==null || sec==='') return '—';
+  if(sec==null || sec==='') return '暂无';
   const n=Number(sec);
-  if(!Number.isFinite(n) || n<0) return '—';
+  if(!Number.isFinite(n) || n<0) return '暂无';
   if(n<60) return '刚刚';
   if(n<3600) return Math.floor(n/60)+' 分钟';
   if(n<86400) return Math.floor(n/3600)+' 小时';
@@ -895,7 +897,7 @@ function rescueTip(a){
 }
 function fmtRescueCount(a){
   const n=Number(a.rescue_count)||0;
-  return n?`${n}次`:'—';
+  return n?`${n}次`:'暂无';
 }
 function copy(t){ navigator.clipboard.writeText(t).then(()=>toast('已复制')); }
 function accountByEmail(email){ return ACCOUNTS.find(x=>x.email===email); }
@@ -912,17 +914,17 @@ const ICO_INFO='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strok
 const ICO_REFRESH='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>';
 const ICO_TRASH='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>';
 function cellWithCopy(email, field, display){
-  if(!display) return `<span class="rec-none">—</span>`;
+  if(!display) return `<span class="rec-none">暂无</span>`;
   return `<div class="cell-main"><span class="val mono" title="${escHtml(display)}">${escHtml(trunc(display,22))}</span>
     <button type="button" class="icon-btn" title="复制" data-act="copy-field" data-email="${escHtml(email)}" data-field="${field}">${COPY_ICON}</button></div>`;
 }
 function cellPassword(email, password){
-  if(!password) return `<span class="rec-none">—</span>`;
-  return `<div class="cell-main"><span class="val mono pwd-mask" title="密码已隐藏，点图标复制">••••••••</span>
+  if(!password) return `<span class="rec-none">暂无</span>`;
+  return `<div class="cell-main"><span class="val mono pwd-mask" title="密码已隐藏，点图标复制">已隐藏</span>
     <button type="button" class="icon-btn" title="复制密码" data-act="copy-field" data-email="${escHtml(email)}" data-field="password">${COPY_ICON}</button></div>`;
 }
 function copyIconBtn(val){
-  if(!val) return '<span class="rec-none">—</span>';
+  if(!val) return '<span class="rec-none">暂无</span>';
   const safe=String(val).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
   return `<div class="cell-main"><span class="val mono">${escHtml(trunc(val,12))}</span>
     <button type="button" class="icon-btn" title="复制" onclick="copy('${safe}')">${COPY_ICON}</button></div>`;
@@ -935,8 +937,8 @@ function tokenStatusMain(a){
   const v=a.verify, hasToken=a.has_token;
   if(!hasToken) return `<span class="tok-main bad">无令牌</span>`;
   if(!v) return `<span class="tok-main unk">未测活</span>`;
-  if(v.ok || v.graph) return `<span class="tok-main ok">✓ 可读信</span>`;
-  return `<span class="tok-main bad">✗ 令牌失效</span>`;
+  if(v.ok || v.graph) return `<span class="tok-main ok">可读信</span>`;
+  return `<span class="tok-main bad">令牌失效</span>`;
 }
 function tokenStatusDetail(a){
   if(a.incubating){
@@ -981,21 +983,21 @@ async function showAccountDetail(email){
       ${detailRow('邮箱', a.email, 'email')}
       ${detailRow('密码', a.password, 'pwd')}
       ${detailRow('应用编号', a.client_id, 'cid')}
-      ${detailRow('恢复邮箱', a.recovery_email||'—', a.recovery_email?'rec_em':null)}
-      ${detailRow('读信令牌', a.refresh_token||'—', a.refresh_token?'rt':null, true)}
-      ${detailRow('恢复密码', a.recovery_password||'—', a.recovery_password?'rec_pw':null)}
+      ${detailRow('恢复邮箱', a.recovery_email||'暂无', a.recovery_email?'rec_em':null)}
+      ${detailRow('读信令牌', a.refresh_token||'暂无', a.refresh_token?'rt':null, true)}
+      ${detailRow('恢复密码', a.recovery_password||'暂无', a.recovery_password?'rec_pw':null)}
     </div>
     <div class="detail-section">读信 · ${a.incubating?'孵化中':(v&&v.ok?'可读信':(v?'令牌失效':'尚未测活'))}</div>
     ${tokenStatusDetail(a)}
     <div class="detail-section">导出行</div>
     <div class="detail-grid">
-      ${detailRow('四段', a.combo||'—', a.combo?'c4':null, true)}
-      ${detailRow('六段', c6||'—', c6?'c6':null, true)}
+      ${detailRow('四段', a.combo||'暂无', a.combo?'c4':null, true)}
+      ${detailRow('六段', c6||'暂无', c6?'c6':null, true)}
     </div>
     <div class="detail-section">其它</div>
     <div class="detail-grid">
-      ${detailRow('来源', a.source||'—', null)}
-      ${detailRow('批次', a.batch_label || (a.batch_no ? ('B'+a.batch_no) : '—'), null)}
+      ${detailRow('来源', a.source||'暂无', null)}
+      ${detailRow('批次', a.batch_label || (a.batch_no ? ('B'+a.batch_no) : '暂无'), null)}
       ${detailRow('注册时间', fmtFullTime(a.created_at), null)}
       ${detailRow('存活时间', fmtSurvivalAge(a), null)}
       ${detailRow('存活区间', survivalTip(a), null)}
@@ -1006,8 +1008,8 @@ async function showAccountDetail(email){
     </div>`;
 }
 function detailRow(label, value, copyKey, wide){
-  const show=value||'—';
-  if(copyKey && value && value!=='—') _detailCopyStore[copyKey]=value;
+  const show=value||'暂无';
+  if(copyKey && value && value!=='暂无') _detailCopyStore[copyKey]=value;
   const copyBtn=copyKey
     ? `<button type="button" class="icon-btn" title="复制" data-act="copy-store" data-copy-key="${copyKey}">${COPY_ICON}</button>` : '';
   return `<div class="drow${wide?' span-2':''}"><div class="dlabel">${label}</div><div class="dval" title="${escHtml(show)}">${escHtml(show)}</div>${copyBtn}</div>`;
@@ -1140,9 +1142,9 @@ function renderProgress(){
     else if(a.status==='失败')err++;
     else if(a.status==='进行中')run++;
     return `<tr><td>${a.index}</td><td><span class="st ${stMap[a.status]||'wait'}">${displayStatus(a.status)}</span></td>
-      <td class="mono">${a.email||'—'}</td>
-      <td>${a.password?copyIconBtn(a.password):'<span class="rec-none">—</span>'}</td>
-      <td>${a.refresh_token?copyIconBtn(a.refresh_token):'<span class="rec-none">—</span>'}</td>
+      <td class="mono">${a.email||'暂无'}</td>
+      <td>${a.password?copyIconBtn(a.password):'<span class="rec-none">暂无</span>'}</td>
+      <td>${a.refresh_token?copyIconBtn(a.refresh_token):'<span class="rec-none">暂无</span>'}</td>
       <td style="color:var(--danger);font-size:11px;">${escHtml(a.error||'')}</td></tr>`;
   }).join('');
   $('nTotal').textContent=rows.length; $('nOk').textContent=ok; $('nErr').textContent=err;
@@ -1171,7 +1173,7 @@ async function copyRegisterLogs(){
 function renderSummary(s){
   if(!s){ $('batchSummary').className='msgbox'; $('batchSummary').innerHTML=''; return; }
   const st=s.avg_stage_timings||{};
-  const stages=Object.entries(st).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="badge neutral">${k} ${v}s</span>`).join(' ')||'—';
+  const stages=Object.entries(st).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="badge neutral">${k} ${v}s</span>`).join(' ')||'暂无';
   $('batchSummary').className='msgbox show ok';
   $('batchSummary').innerHTML=`<b>本批小结</b>　成功 ${s.ok}/${s.total}（失败 ${s.failed}）　本批耗时 <b>${s.elapsed}s</b>　单号均耗 <b>${s.avg_per_account}s</b><br><span style="color:var(--fg-3)">阶段平均：</span>${stages}`;
 }
@@ -1237,12 +1239,12 @@ function renderPool(){
       <td>${cellPassword(a.email,a.password)}</td>
       <td>${rec}</td>
       <td>${tokenStatusMain(a)}</td>
-      <td>${batch?`<span class="cell-batch" title="批次 ${escHtml(batch)}${a.batch_id?(' · '+escHtml(a.batch_id)):''}">${escHtml(batch)}</span>`:'<span class="rec-none">—</span>'}</td>
+      <td>${batch?`<span class="cell-batch" title="批次 ${escHtml(batch)}${a.batch_id?(' · '+escHtml(a.batch_id)):''}">${escHtml(batch)}</span>`:'<span class="rec-none">暂无</span>'}</td>
       <td class="cell-time" title="${escHtml(fmtFullTime(a.created_at))}">${escHtml(fmtShortTime(a.created_at))}</td>
       <td class="cell-age" title="${escHtml(survivalTip(a))}">${escHtml(fmtSurvivalAge(a))}</td>
       <td class="cell-relogin mono" title="${escHtml(rescueTip(a))}">${escHtml(fmtRescueCount(a))}</td>
       <td class="cell-time" title="${escHtml(fmtFullTime(a.updated_at))}">${escHtml(fmtShortTime(a.updated_at))}</td>
-      <td style="font-size:11.5px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(a.note||'')}">${note}${tags||'<span class="rec-none">—</span>'}</td>
+      <td style="font-size:11.5px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(a.note||'')}">${note}${tags||'<span class="rec-none">暂无</span>'}</td>
       <td><div class="act-row">
         <button type="button" class="icon-btn is-info" title="详情" data-act="detail" data-email="${em}">${ICO_INFO}</button>
         <button type="button" class="icon-btn is-query" title="测活" data-act="verify" data-email="${em}">${ICO_REFRESH}</button>
@@ -1503,7 +1505,7 @@ $('qoderjiImportDo').onclick=async()=>{
 };
 
 function setStBadge(el,label,state,status){ const cls=state===true?'ok':(state===false?'err':'wait');
-  const suf=(status===undefined||status===null)?(state===true?'✓':(state===false?'✗':'—')):status;
+  const suf=(status===undefined||status===null)?(state===true?'通过':(state===false?'不通过':'暂无')):status;
   el.className='st '+cls; el.textContent=`${label}: ${suf}`; }
 async function verifyCombo(){
   const body={ combo:$('verCombo').value.trim()||null, email:$('verEmail').value.trim()||null,
@@ -1515,7 +1517,7 @@ async function verifyCombo(){
     const j=await jpost('/api/verify-combo',body);
     setStBadge($('vGraph'),'读信',j.graph?j.graph.ok:null,j.graph?j.graph.status:null);
     setStBadge($('vRest'),'备用接口',j.outlook_rest?j.outlook_rest.ok:null,j.outlook_rest?j.outlook_rest.status:null);
-    if(j.imap&&j.imap.tested) setStBadge($('vImap'),'IMAP',j.imap.ok,j.imap.ok?'OK':(j.imap.stage||'✗')); else setStBadge($('vImap'),'IMAP',null,'未测');
+    if(j.imap&&j.imap.tested) setStBadge($('vImap'),'IMAP',j.imap.ok,j.imap.ok?'OK':(j.imap.stage||'不通过')); else setStBadge($('vImap'),'IMAP',null,'未测');
     $('vSummary').className='msgbox show '+(j.ok?'ok':'err'); $('vSummary').textContent=j.summary||j.message||(j.ok?'可用':'不可用');
     let scope=j.granted_scope?('授权范围: '+j.granted_scope):'';
     if(j.refresh_error) scope+=(scope?' | ':'')+'令牌错误: '+j.refresh_error;
@@ -1542,10 +1544,10 @@ async function runKeepalive(emails){
     if(!(j.results||[]).length){ opsMsg('warn',j.message||'无可保活账号'); toast(j.message||'无可保活账号'); return; }
     const bd=(ok)=>ok?'<span class="badge success">是</span>':'<span class="badge danger">否</span>';
     $('kaBody').innerHTML=j.results.map(r=>`<tr>
-      <td class="mono">${r.email||'—'}</td>
+      <td class="mono">${r.email||'暂无'}</td>
       <td>${r.skip?'<span class="badge neutral">跳过</span>':bd(r.ok)}</td>
       <td>${bd(r.profile)}</td><td>${bd(r.message)}</td>
-      <td>${r.rotated?'<span class="badge brand">已轮换</span>':'<span style="color:var(--fg-4)">—</span>'}</td>
+      <td>${r.rotated?'<span class="badge brand">已轮换</span>':'<span style="color:var(--fg-4)">暂无</span>'}</td>
       <td style="font-size:11px;color:var(--fg-3)">${r.detail||''}</td></tr>`).join('');
     $('kaWrap').style.display='block';
     const done=`保活完成：存活 ${j.alive||0}/${j.total||0}，已更新 ${j.rotated||0}`;
@@ -1595,20 +1597,20 @@ function renderProxyAnalytics(a){
     const fallback=(a&&a.by_provider_country)||[];
     if(!fallback.length){ el.innerHTML='<tr><td colspan="7" class="empty">暂无统计数据（完成注册/重登后自动记录）</td></tr>'; return; }
     el.innerHTML=fallback.map(r=>`<tr>
-      <td>${escHtml(r.provider||'—')}</td>
-      <td>${escHtml(r.country||'—')}</td>
-      <td class="hint">—</td>
+      <td>${escHtml(r.provider||'暂无')}</td>
+      <td>${escHtml(r.country||'暂无')}</td>
+      <td class="hint">暂无</td>
       <td>${r.total||0}</td><td style="color:var(--success)">${r.success||0}</td><td style="color:var(--danger)">${r.fail||0}</td>
-      <td><b>${r.rate!=null?r.rate+'%':'—'}</b></td>
+      <td><b>${r.rate!=null?r.rate+'%':'暂无'}</b></td>
     </tr>`).join('');
     return;
   }
   el.innerHTML=rows.map(r=>`<tr>
-    <td>${escHtml(r.provider||'—')}</td>
-    <td>${escHtml(r.country||'—')}</td>
-    <td>${escHtml(r.reg_country||'—')}</td>
+    <td>${escHtml(r.provider||'暂无')}</td>
+    <td>${escHtml(r.country||'暂无')}</td>
+    <td>${escHtml(r.reg_country||'暂无')}</td>
     <td>${r.total||0}</td><td style="color:var(--success)">${r.success||0}</td><td style="color:var(--danger)">${r.fail||0}</td>
-    <td><b>${r.rate!=null?r.rate+'%':'—'}</b></td>
+    <td><b>${r.rate!=null?r.rate+'%':'暂无'}</b></td>
   </tr>`).join('');
 }
 function renderProxyAnalyticsStats(a, ts){
@@ -1617,7 +1619,7 @@ function renderProxyAnalyticsStats(a, ts){
   const ov=(ts&&ts.overall)||{};
   const items=[
     ['事件数', (a&&a.event_count)||0, 'var(--fg)'],
-    ['区间成功率', ov.rate!=null?ov.rate+'%':'—', 'var(--brand)'],
+    ['区间成功率', ov.rate!=null?ov.rate+'%':'暂无', 'var(--brand)'],
     ['成功', ov.success||0, 'var(--success)'],
     ['失败', ov.fail||0, 'var(--danger)'],
   ];
@@ -1668,7 +1670,7 @@ function showProxyChartTooltip(idx, clientX, clientY){
     const p=(ln.points||[])[idx]||{};
     if(!(p.total>0)) return;
     const col=chartColorForLine(ln,i);
-    const rate=p.rate!=null?`${p.rate}%`:'—';
+    const rate=p.rate!=null?`${p.rate}%`:'暂无';
     html+=`<div class="tt-row"><span class="tt-name"><span class="tt-dot" style="background:${col}"></span>${escHtml(ln.label)}</span><span class="tt-val">${rate} · ${p.success||0}/${p.total||0}</span></div>`;
   });
   html+=`<div class="tt-vol">当日总事件 ${day.total||0}（成功 ${day.success||0} / 失败 ${day.fail||0}）</div>`;
@@ -1831,15 +1833,15 @@ function renderProxyTable(){
   const en=p.enabled!==false;
     return `<tr data-id="${escHtml(p.id)}">
       <td><input type="checkbox" class="ck proxy-row-ck" data-id="${escHtml(p.id)}" ${chk}/></td>
-      <td>${escHtml(p.label||'—')}</td>
-      <td>${escHtml(p.provider||'—')}</td>
-      <td>${escHtml(p.country||'—')}</td>
-      <td class="mono" style="font-size:11px;">${escHtml(p.template_masked||'—')}</td>
+      <td>${escHtml(p.label||'暂无')}</td>
+      <td>${escHtml(p.provider||'暂无')}</td>
+      <td>${escHtml(p.country||'暂无')}</td>
+      <td class="mono" style="font-size:11px;">${escHtml(p.template_masked||'暂无')}</td>
       <td>${p.has_sid?'<span class="badge brand">是</span>':'<span class="badge neutral">否</span>'}</td>
       <td>${proxyStatusBadge(p.status)}</td>
-      <td class="mono" style="font-size:11px;">${escHtml(p.exit_ip||'—')}</td>
+      <td class="mono" style="font-size:11px;">${escHtml(p.exit_ip||'暂无')}</td>
       <td class="mono" style="font-size:11px;">${st.assigned||0}/${st.success||0}/${st.fail||0}</td>
-      <td class="cell-time" title="${escHtml(p.last_check_msg||'')}">${escHtml((p.last_check_at||'').replace('T',' ').slice(0,16)||'—')}</td>
+      <td class="cell-time" title="${escHtml(p.last_check_msg||'')}">${escHtml((p.last_check_at||'').replace('T',' ').slice(0,16)||'暂无')}</td>
       <td><input type="checkbox" class="proxy-en-toggle" data-id="${escHtml(p.id)}" ${en?'checked':''}/></td>
       <td><button type="button" class="btn sm proxy-check-one" data-id="${escHtml(p.id)}">预检</button></td>
     </tr>`;
@@ -1850,9 +1852,9 @@ function renderProxyBindings(rows){
   if(!rows||!rows.length){ $('proxyBindBody').innerHTML='<tr><td colspan="6" class="empty">暂无绑定</td></tr>'; return; }
   $('proxyBindBody').innerHTML=rows.map(b=>`<tr>
     <td class="mono">${escHtml(b.email)}</td>
-    <td>${escHtml(b.proxy_label||b.proxy_id||'—')}</td>
-    <td class="mono" style="font-size:11px;">${escHtml(b.resolved_masked||'—')}</td>
-    <td>${escHtml({register:'注册',rescue:'重登',manual:'手动'}[b.purpose]||b.purpose||'—')}</td>
+    <td>${escHtml(b.proxy_label||b.proxy_id||'暂无')}</td>
+    <td class="mono" style="font-size:11px;">${escHtml(b.resolved_masked||'暂无')}</td>
+    <td>${escHtml({register:'注册',rescue:'重登',manual:'手动'}[b.purpose]||b.purpose||'暂无')}</td>
     <td class="cell-time">${escHtml((b.assigned_at||'').replace('T',' ').slice(0,19))}</td>
     <td><button type="button" class="btn sm danger proxy-unbind" data-email="${escHtml(b.email)}">解绑</button></td>
   </tr>`).join('');
