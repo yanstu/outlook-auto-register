@@ -309,6 +309,34 @@ def _qoderji_table_exists(conn: sqlite3.Connection) -> bool:
     return row is not None
 
 
+def _open_readonly(path: Path) -> sqlite3.Connection:
+    """只读打开一份可能正被写入的 sqlite 库。
+
+    qoderji 的库跑在 ``PRAGMA journal_mode=WAL``，而它的数据目录只有 root 能写
+    （我们的进程是 ``ubuntu``）。普通 ``mode=ro`` 连接在 WAL 模式下仍可能需要创建 /
+    更新 ``-shm`` 文件来协调读锁，没有目录写权限时会炸成
+    ``sqlite3.OperationalError: attempt to write a readonly database``。优先加
+    ``immutable=1``：告诉 SQLite「这份文件不会被别的连接改」，直接跳过 WAL 的共享
+    内存探测，只从主库文件读当前已落盘的内容——不需要任何目录写权限，代价是可能读
+    不到还没 checkpoint 进主文件的最后几条写入，这里可接受。失败（比如库根本没在
+    WAL 模式）时退回普通 ``mode=ro``。
+    """
+    last_exc: Optional[BaseException] = None
+    for extra in ("&immutable=1", ""):
+        uri = f"file:{path.resolve()}?mode=ro{extra}"
+        conn: Optional[sqlite3.Connection] = None
+        try:
+            conn = sqlite3.connect(uri, uri=True, timeout=10)
+            conn.execute("SELECT 1")
+            return conn
+        except sqlite3.OperationalError as exc:
+            last_exc = exc
+            if conn is not None:
+                conn.close()
+    assert last_exc is not None
+    raise last_exc
+
+
 def fetch_qoderji_combos(
     db_path: os.PathLike[str] | str,
     *,
@@ -318,7 +346,7 @@ def fetch_qoderji_combos(
 ) -> tuple[list[ExternalCombo], dict[str, Any]]:
     """只读连接一个 qoderji sqlite 库，拉出 `email_inventory` 里的 combo。
 
-    从不写这个库（``mode=ro`` URI 连接），可以在 qoderji 正常运行、持续写入时安全跑。
+    从不写这个库，可以在 qoderji 正常运行、持续写入时安全跑（见 `_open_readonly`）。
     """
     path = Path(db_path)
     stats: dict[str, Any] = {
@@ -334,52 +362,56 @@ def fetch_qoderji_combos(
         return combos, stats
 
     statuses = tuple(statuses) if statuses else ()
-    uri = f"file:{path.resolve()}?mode=ro"
     try:
-        conn = sqlite3.connect(uri, uri=True, timeout=10)
+        conn = _open_readonly(path)
     except sqlite3.OperationalError as exc:
         stats["error"] = f"打开失败: {exc}"
         return combos, stats
     conn.row_factory = sqlite3.Row
     try:
-        if not _qoderji_table_exists(conn):
-            stats["error"] = "email_inventory 表不存在"
-            return combos, stats
+        try:
+            if not _qoderji_table_exists(conn):
+                stats["error"] = "email_inventory 表不存在"
+                return combos, stats
 
-        clauses: list[str] = []
-        params: list[Any] = []
-        if statuses:
-            placeholders = ",".join("?" for _ in statuses)
-            clauses.append(f"status IN ({placeholders})")
-            params.extend(statuses)
-        if batch_id:
-            clauses.append("batch_id = ?")
-            params.append(batch_id)
-        query = "SELECT email, raw, status, batch_id, source, added_at FROM email_inventory"
-        if clauses:
-            query += " WHERE " + " AND ".join(clauses)
-        query += " ORDER BY added_at ASC"
-        if limit:
-            query += " LIMIT ?"
-            params.append(int(limit))
+            clauses: list[str] = []
+            params: list[Any] = []
+            if statuses:
+                placeholders = ",".join("?" for _ in statuses)
+                clauses.append(f"status IN ({placeholders})")
+                params.extend(statuses)
+            if batch_id:
+                clauses.append("batch_id = ?")
+                params.append(batch_id)
+            query = "SELECT email, raw, status, batch_id, source, added_at FROM email_inventory"
+            if clauses:
+                query += " WHERE " + " AND ".join(clauses)
+            query += " ORDER BY added_at ASC"
+            if limit:
+                query += " LIMIT ?"
+                params.append(int(limit))
 
-        for row in conn.execute(query, params):
-            stats["scanned"] += 1
-            st = row["status"] or ""
-            stats["by_status"][st] = stats["by_status"].get(st, 0) + 1
-            raw_line = row["raw"] or row["email"] or ""
-            combo = parse_combo_line(raw_line)
-            if combo is None or not combo.refresh_token:
-                stats["invalid"] += 1
-                continue
-            combo.extra.update({
-                "qoderji_status": st,
-                "qoderji_batch_id": row["batch_id"] or "",
-                "qoderji_source": row["source"] or "",
-                "qoderji_added_at": row["added_at"],
-            })
-            combos.append(combo)
-            stats["parsed"] += 1
+            for row in conn.execute(query, params):
+                stats["scanned"] += 1
+                st = row["status"] or ""
+                stats["by_status"][st] = stats["by_status"].get(st, 0) + 1
+                raw_line = row["raw"] or row["email"] or ""
+                combo = parse_combo_line(raw_line)
+                if combo is None or not combo.refresh_token:
+                    stats["invalid"] += 1
+                    continue
+                combo.extra.update({
+                    "qoderji_status": st,
+                    "qoderji_batch_id": row["batch_id"] or "",
+                    "qoderji_source": row["source"] or "",
+                    "qoderji_added_at": row["added_at"],
+                })
+                combos.append(combo)
+                stats["parsed"] += 1
+        except sqlite3.Error as exc:
+            # 同机的活库随时可能在 checkpoint，读到脏页这种极端情况宁可如实报错，
+            # 也不要把已经扫到的 combos 半途甩掉或让整个请求 500。
+            stats["error"] = f"读取中断: {exc}"
     finally:
         conn.close()
     return combos, stats

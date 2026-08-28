@@ -354,6 +354,44 @@ class TestFetchQoderjiCombos(unittest.TestCase):
             self.assertEqual(combos, [])
             self.assertIn("error", stats)
 
+    def test_survives_locked_wal_directory(self):
+        """复现线上真实故障：qoderji 的库是 WAL 模式，数据目录只有 root 能写。
+
+        普通 ``mode=ro`` 连接在 WAL 库上仍可能要创建/更新 ``-shm`` 才能读，没有目录
+        写权限时会炸 ``attempt to write a readonly database``；这里验证
+        `_open_readonly` 的 ``immutable=1`` 兜底能在这种目录下依然读出数据。
+        """
+        with tempfile.TemporaryDirectory() as d:
+            dbp = Path(d) / "wal.db"
+            conn = sqlite3.connect(str(dbp))
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.executescript(
+                """
+                CREATE TABLE email_inventory (
+                    email TEXT PRIMARY KEY, raw TEXT NOT NULL DEFAULT '',
+                    batch_id TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL DEFAULT 'untried', added_at REAL NOT NULL
+                );
+                """
+            )
+            conn.execute(
+                "INSERT INTO email_inventory(email, raw, status, added_at) VALUES (?,?,?,?)",
+                ("wal1@outlook.com", "wal1@outlook.com----x----cid----rt", "untried", time.time()),
+            )
+            conn.commit()
+            conn.close()  # 干净关闭：WAL 自动 checkpoint，-wal/-shm 通常被清掉（复现线上现场）
+            for suffix in ("-wal", "-shm"):
+                p = Path(str(dbp) + suffix)
+                if p.exists():
+                    p.unlink()
+            os.chmod(d, 0o555)  # 模拟目录属主是 root、我们的进程用户没有写权限
+            try:
+                combos, stats = external_import.fetch_qoderji_combos(dbp)
+            finally:
+                os.chmod(d, 0o755)
+            self.assertNotIn("error", stats)
+            self.assertEqual({c.email for c in combos}, {"wal1@outlook.com"})
+
     def test_readonly_does_not_lock_writer(self):
         """确认只读连接不会阻塞 qoderji 自己继续写这份库（同机常驻服务的现实约束）。"""
         with tempfile.TemporaryDirectory() as d:
