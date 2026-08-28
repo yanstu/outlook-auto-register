@@ -100,7 +100,7 @@ def refresh_token_for(
                 time.sleep(1.0 * (attempt + 1))
                 continue
     desc = str(last_exc or "network error")[:200]
-    logger.warning("refresh_token 网络异常（已重试 %d 次）: %s", retries, desc)
+    logger.warning("读信令牌网络异常（已重试 %d 次）: %s", retries, desc)
     return {
         "error": "transient_network",
         "error_description": desc,
@@ -204,7 +204,7 @@ def list_messages(
     folder: str = "inbox",
     proxy_url: str = "",
 ) -> list[dict]:
-    """读取最近邮件（graph 或 outlook_rest）。返回标准化 [{subject, from, received, body}]。"""
+    """读取最近邮件（graph 或 outlook_rest）。返回标准化 [{id, subject, from, received, body}]。"""
     at = _access_token(refresh_token, mode, proxy_url)
     if not at:
         return []
@@ -214,13 +214,13 @@ def list_messages(
         url = (
             f"{GRAPH_BASE}/me/mailFolders/{folder}/messages"
             f"?$top={top}&$orderby=receivedDateTime desc"
-            f"&$select=subject,from,receivedDateTime,bodyPreview,body"
+            f"&$select=id,subject,from,receivedDateTime,bodyPreview,body"
         )
     else:
         url = (
             f"{OUTLOOK_REST_BASE}/me/MailFolders/{folder}/messages"
             f"?$top={top}&$orderby=ReceivedDateTime desc"
-            f"&$select=Subject,From,ReceivedDateTime,BodyPreview,Body"
+            f"&$select=Id,Subject,From,ReceivedDateTime,BodyPreview,Body"
         )
     r = requests.get(url, headers=headers, proxies=proxies, timeout=30)
     if r.status_code != 200:
@@ -231,6 +231,7 @@ def list_messages(
         if mode == "graph":
             frm = (((m.get("from") or {}).get("emailAddress") or {}).get("address")) or ""
             out.append({
+                "id": m.get("id", ""),
                 "subject": m.get("subject", ""),
                 "from": frm,
                 "received": m.get("receivedDateTime", ""),
@@ -240,6 +241,7 @@ def list_messages(
         else:
             frm = (((m.get("From") or {}).get("EmailAddress") or {}).get("Address")) or ""
             out.append({
+                "id": m.get("Id") or m.get("id") or "",
                 "subject": m.get("Subject", ""),
                 "from": frm,
                 "received": m.get("ReceivedDateTime", ""),

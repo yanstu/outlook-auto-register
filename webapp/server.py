@@ -6,11 +6,14 @@
   绝不修改核心协议流程文件（另一个 worker 正在改引擎）。
 - 注册是阻塞式网络任务：放后台线程 + 线程池并发执行，通过 SSE 实时推进度。
 - 邮件令牌模式 graph/outlook_rest/imap/dual（由引擎 _MAIL_SCOPE_BY_MODE 决定实际可用）；
-  默认 graph 走 Graph API 读信，绕开新号 IMAP 开关限制。
+  默认 graph_recovery（Graph 六段式含恢复邮箱）；省略 token_mode 时 API/UI 均用此默认。
 - 批量注册走引擎 register_batch_iter（生成器驱动 SSE，引擎内部已 save_account），
   import 失败时线程池兜底。
 - 保活接 scripts.keepalive.keepalive_one（refresh→access→GET /me+列信→轮换回写）；
   「开启 IMAP」仍为占位，如实反馈，绝不假装成功。
+- 新号孵化期（OUTLOOK_INCUBATION_HOURS，默认 48h）内批量测活跳过，不打微软接口。
+- OUTLOOK_CONSOLE_PASSWORD 非空时全站要登录（cookie 会话 / X-Console-Password 头），
+  Mailbox API（/api/v1）不受它影响，仍只认自己的 Bearer mbx_sk。
 
 启动：
   cd outlook-api-register
@@ -18,11 +21,14 @@
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import os
 import queue
 import re
+import secrets
 import sys
 import threading
 import time
@@ -31,13 +37,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import quote
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import (
     HTMLResponse,
     JSONResponse,
     PlainTextResponse,
+    RedirectResponse,
     StreamingResponse,
 )
 from pydantic import BaseModel
@@ -46,15 +54,19 @@ from pydantic import BaseModel
 from outlook_api_reg.account_persist import merge_account_row
 from outlook_api_reg import account_store
 from outlook_api_reg import database as app_db
+from outlook_api_reg import lifecycle
 from outlook_api_reg.register import register_one, save_account
 from outlook_api_reg.models import RegisterResult
 from outlook_api_reg import mail_reader
 from outlook_api_reg import graph_mail, enable_imap, post_register
 from outlook_api_reg import constants as reg_constants
 from outlook_api_reg import cf_domain_mail
+from outlook_api_reg import coolhs_mail
 from outlook_api_reg import proxy_pool
 from outlook_api_reg import external_recovery_pool as ext_recovery_pool
 from outlook_api_reg import register as reg_module
+from outlook_api_reg import mailbox_gateway
+from outlook_api_reg import external_import
 
 load_dotenv()
 
@@ -99,20 +111,24 @@ _ENGINE_MODES = list(_scope_map.keys()) or [
     "outlook_rest",
     "imap",
 ]
-DEFAULT_TOKEN_MODE = getattr(reg_constants, "MAIL_TOKEN_MODE", "graph")
+DEFAULT_TOKEN_MODE = "graph_recovery"
+# 引擎环境变量仍可覆盖 OAuth scope；页面/注册 API 省略 token_mode 时固定为 graph_recovery
+_ENV_TOKEN_MODE = getattr(reg_constants, "MAIL_TOKEN_MODE", "graph")
 DUAL_READY = "dual" in _scope_map
-# 引擎高级模式仍暴露给 API；页面「产出格式」只用 graph / login_exe
+# 引擎高级模式仍暴露给 API；页面「产出格式」只用 graph / graph_recovery
 TOKEN_MODES = _ENGINE_MODES + (["dual"] if "dual" not in _ENGINE_MODES else [])
+if "graph_recovery" not in TOKEN_MODES:
+    TOKEN_MODES = list(TOKEN_MODES) + ["graph_recovery"]
 PRODUCT_MODES = [
     {
         "id": "graph",
-        "label": "Graph 四段式",
+        "label": "四段（读信）",
         "export": "graph",
         "hint": "",
     },
     {
         "id": "graph_recovery",
-        "label": "Graph 六段式（推荐）",
+        "label": "六段（含恢复邮箱，推荐）",
         "export": "recovery",
         "hint": "",
     },
@@ -127,6 +143,94 @@ except Exception:  # noqa: BLE001
     BATCH_READY = False
 
 app = FastAPI(title="Outlook API 注册控制台", version="2.0.0")
+
+# Mailbox API v1：对外收信 / 取码 / 查字段。关掉它运维台照常工作。
+MAILBOX_API_ENABLED = mailbox_gateway.api_enabled()
+if MAILBOX_API_ENABLED:
+    app.include_router(mailbox_gateway.mailbox_router)
+    mailbox_gateway.install_error_handlers(app)
+
+
+# ---------------------------------------------------------------------------
+# 运维台登录门（OUTLOOK_CONSOLE_PASSWORD）
+#
+# 运维台本身没有账号体系，一旦挂到公网域名上，任何人都能翻账号库。所以口令非空时
+# 由一层 HTTP middleware 在路由之前统一拦截：浏览器走 /login.html 种下的 httponly
+# 会话 cookie，curl/脚本走 X-Console-Password 头。
+#
+# Mailbox API（/api/v1）不受这道门管：它给其他项目调用，自带 Bearer mbx_sk 鉴权，
+# 再叠一层运维口令会让所有调用方都跑不通。
+# ---------------------------------------------------------------------------
+CONSOLE_SESSION_COOKIE = "outlook_ops_session"
+CONSOLE_SESSION_MAX_AGE = 30 * 86400
+
+# 没有会话也能访问：登录页与它的接口、探活。
+_PUBLIC_PATHS = {"/favicon.ico", "/login.html", "/api/auth/login", "/api/auth/logout", "/api/health"}
+# Mailbox API 自带 Bearer 鉴权，整段放行给它自己把关
+_PUBLIC_PREFIXES = ("/api/v1/",)
+# 浏览器地址栏能打开的页面：未登录时跳登录页，而不是甩一段 401 文本
+_HTML_PATHS = {"/", "/index.html"}
+
+
+def _console_password() -> str:
+    return (os.environ.get("OUTLOOK_CONSOLE_PASSWORD") or "").strip()
+
+
+def _console_session_token(password: str) -> str:
+    return hmac.new(password.encode("utf-8"), b"outlook-ops-v1", hashlib.sha256).hexdigest()
+
+
+def _console_cookie_valid(request: Request, password: str) -> bool:
+    supplied = (request.cookies.get(CONSOLE_SESSION_COOKIE) or "").strip()
+    if not supplied:
+        return False
+    return secrets.compare_digest(supplied, _console_session_token(password))
+
+
+def _console_header_authed(request: Request, password: str) -> bool:
+    supplied = (request.headers.get("x-console-password") or "").strip()
+    return bool(supplied) and secrets.compare_digest(supplied, password)
+
+
+def _set_console_cookie(resp: Response, password: str, request: Request) -> None:
+    resp.set_cookie(
+        key=CONSOLE_SESSION_COOKIE,
+        value=_console_session_token(password),
+        max_age=CONSOLE_SESSION_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=request.url.scheme == "https",
+        path="/",
+    )
+
+
+def _console_path_public(path: str) -> bool:
+    if path in _PUBLIC_PATHS or path.startswith(_PUBLIC_PREFIXES):
+        return True
+    # 路由前缀本身（无尾斜杠）也算 Mailbox API 的地盘
+    return path == "/api/v1"
+
+
+@app.middleware("http")
+async def _console_auth(request: Request, call_next):
+    password = _console_password()
+    path = request.url.path or ""
+    if not password or _console_path_public(path):
+        return await call_next(request)
+    header_authed = _console_header_authed(request, password)
+    if header_authed or _console_cookie_valid(request, password):
+        response = await call_next(request)
+        # 带对了口令头的浏览器顺手拿一枚会话，之后不必每次都带
+        if header_authed:
+            _set_console_cookie(response, password, request)
+        return response
+    msg = "需要登录，或口令已变更，请重新登录"
+    if path in _HTML_PATHS:
+        return RedirectResponse(url=f"/login.html?next={quote(path, safe='')}", status_code=302)
+    if path.startswith("/api/"):
+        return JSONResponse(status_code=401, content={"ok": False, "error": msg, "auth": True})
+    return PlainTextResponse(msg, status_code=401)
+
 
 _save_lock = threading.Lock()
 _meta_lock = threading.Lock()
@@ -157,7 +261,7 @@ def _build_register_proxy_plan(p: dict[str, Any], count: int) -> tuple[list[str]
                 plan = plan + list(extra)
                 meta["fallback_used"] = True
         if not plan:
-            raise ValueError("代理池无可用条目，请先在「代理池」页添加代理，或在注册页填写备用代理（会自动写入数据库）。")
+            raise ValueError("代理池暂无可用条目。请先添加代理，或填写备用代理。")
         return plan, meta
     proxy = (p.get("proxy") or "").strip()
     if not proxy:
@@ -520,6 +624,76 @@ class Job:
         }
 
 
+# 引擎 INFO/WARNING/ERROR 会经本 handler 进网页「注册日志」；先丢内部调试，再改业务用语。
+_SSE_LOG_DISCARD = (
+    "HAR",
+    "已 dump",
+    "credentialaction",
+    "frmAddProof",
+    "canary",
+    "iOttText",
+    "urlPost",
+    "对齐 Outlook",
+    "/me=",
+    "uaid=",
+    "opid=",
+    "verify #",
+    "attempt=",
+    "body=%s",
+    "body=",
+    "px3=",
+    "task_id=",
+    "$Config",
+    "slt 登录完成 status=",
+    "构造 POST",
+    "fido/create",
+)
+
+# 长词在前，避免被短词先替换（如 mail OAuth → 读信授权，再轮到 OAuth）。
+_SSE_LOG_REPLACEMENTS = (
+    ("mail OAuth", "读信授权"),
+    ("token 交换", "换取令牌"),
+    ("refresh_token", "读信令牌"),
+    ("risk/initialize", "初始化"),
+    ("risk/verify", "人机验证"),
+    ("captcha.run", "打码服务"),
+    ("coolhs-mail", "恢复邮箱"),
+    ("invalid_grant", "令牌失效"),
+    ("防封·一号一 IP", "独立出口"),
+    ("防封·启动错峰", "启动间隔"),
+    ("阶段耗时(s):", "各阶段耗时："),
+    ("AddProof", "绑定恢复邮箱"),
+    ("VerifyProof", "验证恢复邮箱"),
+    ("SQLite", "账号库"),
+    ("OAuth", "授权"),
+    ("proofs", "安全验证"),
+    ("OTT", "验证码"),
+)
+
+_SSE_URL_RE = re.compile(r"https?://\S+")
+
+
+def _sanitize_sse_log(msg: str) -> Optional[str]:
+    """净化引擎日志：内部调试行返回 None（不推送），其余替换后推送。"""
+    if msg is None:
+        return None
+    text = str(msg)
+    if not text.strip():
+        return None
+    if any(marker in text for marker in _SSE_LOG_DISCARD):
+        return None
+    for old, new in _SSE_LOG_REPLACEMENTS:
+        if old in text:
+            text = text.replace(old, new)
+
+    def _shorten_url(m: re.Match[str]) -> str:
+        return "…" if len(m.group(0)) > 40 else m.group(0)
+
+    text = _SSE_URL_RE.sub(_shorten_url, text)
+    text = text.strip()
+    return text or None
+
+
 class _JobLogHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:  # noqa: D401
         if not (record.name == "outlook_api_reg" or record.name.startswith("outlook_api_reg.")):
@@ -534,7 +708,10 @@ class _JobLogHandler(logging.Handler):
             msg = record.getMessage()
         except Exception:  # noqa: BLE001
             msg = str(record.msg)
-        job.push_log(record.levelname, msg)
+        clean = _sanitize_sse_log(msg)
+        if clean is None:
+            return
+        job.push_log(record.levelname, clean)
 
 
 def _install_log_handler() -> None:
@@ -617,22 +794,38 @@ def _batch_index() -> dict[str, dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
+def _token_mode_label(mode: str) -> str:
+    return {
+        "graph": "四段",
+        "graph_recovery": "六段（含恢复邮箱）",
+        "dual": "六段（双令牌）",
+        "recovery": "六段（含恢复邮箱）",
+        "login_exe": "六段（含恢复邮箱）",
+    }.get((mode or "").strip().lower(), mode or "")
+
+
+def _proxy_strategy_label(raw: str) -> str:
+    return {
+        "round_robin": "轮询",
+        "least_used": "最少使用",
+        "random": "随机",
+    }.get((raw or "").strip().lower(), raw or "—")
+
+
 def _run_dry(job: Job) -> None:
     steps = [
-        "代理预检通过: (模拟) 出口=203.0.113.7",
-        "选用邮箱: 模拟随机前缀@outlook.com",
-        "risk/initialize → humanSensorUrl 预加载",
-        "captcha.run silent → press（模拟通过）",
-        "risk/verify #2 challengeSolution 提交",
-        "CreateAccount 成功",
-        "oauth20_authorize.srf slt 登录（模拟）",
+        "代理预检通过（演示）",
+        "已选定演示邮箱",
+        "人机验证通过（演示）",
+        "账号创建成功（演示）",
+        "登录完成（演示）",
     ]
     mode = job.params.get("token_mode") or DEFAULT_TOKEN_MODE
-    job.push_log("INFO", f"产出格式: {mode}（干跑，仅演示）｜并发度 {job.concurrency}")
+    job.push_log("INFO", f"产出格式: {_token_mode_label(mode)}（演示，不消耗额度）｜并发 {job.concurrency}")
 
     def one(i: int) -> None:
         job.update_account(i, status="进行中")
-        job.push_log("INFO", f"[#{i+1}] 干跑开始（不消耗真实资源）")
+        job.push_log("INFO", f"[#{i+1}] 演示开始（不消耗真实额度）")
         for s in steps:
             job.push_log("INFO", f"[#{i+1}] {s}")
             time.sleep(0.08)
@@ -642,15 +835,14 @@ def _run_dry(job: Job) -> None:
             rec = f"rec{i+1}_{uuid.uuid4().hex[:6]}@your-cf-domain.com" if mode == "graph_recovery" else f"rec{i+1}_{uuid.uuid4().hex[:6]}@your-recovery-host.com"
             rec_pwd = "cf_domain" if mode == "graph_recovery" else "DryRunRecPwd"
             combo = f"{email}----{pwd}----{MAIL_CLIENT_ID}--------{rec}----{rec_pwd}"
-            label = "Graph 六段式" if mode == "graph_recovery" else "login.exe 六段式(IMAP)"
-            job.push_log("INFO", f"[#{i+1}] 干跑产出 {label}（恢复邮箱，非 dual）")
+            job.push_log("INFO", f"[#{i+1}] 演示产出 {_token_mode_label(mode)}")
         else:
             combo = f"{email}----{pwd}----{MAIL_CLIENT_ID}----"
         job.update_account(
-            i, status="成功(干跑)", email=email, password=pwd,
+            i, status="成功(演示)", email=email, password=pwd,
             client_id=MAIL_CLIENT_ID, refresh_token="", combo=combo, error="",
         )
-        job.push_log("INFO", f"[#{i+1}] 干跑完成（未写盘、未消耗额度）")
+        job.push_log("INFO", f"[#{i+1}] 演示完成（未保存、未消耗额度）")
 
     conc = max(1, min(job.concurrency, job.count))
     with ThreadPoolExecutor(max_workers=conc) as ex:
@@ -714,7 +906,7 @@ def _do_register_one(job: Job, i: int, p: dict[str, Any]) -> None:
             combo_recovery=result.to_combo(recovery=True) if result.recovery_email else "",
             error="", saved_path=saved,
         )
-        tip = "已取 refresh_token" if result.refresh_token else "无 refresh_token"
+        tip = "已取得读信令牌" if result.refresh_token else "缺少读信令牌"
         if result.recovery_email:
             tip += "，已绑恢复邮箱"
         job.push_log("INFO", f"[#{i+1}] 注册成功 {result.email}（{tip}）")
@@ -789,15 +981,15 @@ def _run_batch_iter(job: Job, p: dict[str, Any]) -> bool:
                 )
                 job.push_log(
                     "INFO",
-                    f"引擎批量启动：共 {ev.get('total')} 个，并发 {ev.get('concurrency')}，"
-                    f"相邻启动错峰 {jtxt}",
+                    f"批量任务开始：共 {ev.get('total')} 个，并发 {ev.get('concurrency')}，"
+                    f"相邻启动间隔 {jtxt}",
                 )
                 if ev.get("proxy_unique"):
-                    job.push_log("INFO", "防封·一号一 IP：每号独立 {sid} 会话（出口 IP 不同）")
+                    job.push_log("INFO", "每个账号使用独立出口，避免共用同一 IP")
                 elif not ev.get("proxy_has_sid") and (p.get("proxy") or p.get("proxy_plan")):
                     job.push_log(
                         "WARNING",
-                        "代理未含 {sid}：全批可能共用同一出口 IP，建议改用带 {sid} 的模板",
+                        "当前代理未开启独立会话，整批可能共用同一出口。建议换用带独立会话的代理。",
                     )
             elif etype == "account_start":
                 consumed = True
@@ -833,7 +1025,7 @@ def _run_batch_iter(job: Job, p: dict[str, Any]) -> bool:
                         combo=combo, combo_dual=ev.get("combo_dual") or "",
                         combo_recovery=rec_combo,
                         login_token=bool(ev.get("login_token_present")),
-                        error="", saved_path="(引擎已保存)",
+                        error="", saved_path="(已保存到账号池)",
                     )
                     _after_register_proxy(
                         ev.get("email") or "", assignments, idx, success=True,
@@ -870,11 +1062,11 @@ def _run_batch_iter(job: Job, p: dict[str, Any]) -> bool:
                     "INFO",
                     f"本批完成：成功 {ev.get('ok')}/{ev.get('total')}，本批耗时 "
                     f"{ev.get('elapsed')}s，单号均耗 {ev.get('avg_per_account')}s，"
-                    f"阶段大头：{top_txt}",
+                    f"最耗时阶段：{top_txt}",
                 )
         return True
     except Exception as exc:  # noqa: BLE001
-        job.push_log("WARNING", f"引擎 register_batch_iter 执行异常: {exc}")
+        job.push_log("WARNING", f"批量任务中断: {exc}")
         return consumed  # 已消费部分事件则不重跑，避免重复真实注册
     finally:
         _active_batch_job = None
@@ -913,24 +1105,24 @@ def _run_real(job: Job) -> None:
     if p.get("use_proxy_pool"):
         job.push_log(
             "INFO",
-            f"代理池：已规划 {len(plan)} 条（策略 {pmeta.get('strategy') or '—'}）",
+            f"代理池：已分配 {len(plan)} 条（{_proxy_strategy_label(str(pmeta.get('strategy') or ''))}）",
         )
     retries = max(1, int((os.environ.get("REG_PROXY_RETRIES") or "3").strip() or "3"))
-    job.push_log("INFO", f"PX/代理失败自动重试：最多 {retries} 次（REG_PROXY_RETRIES）")
+    job.push_log("INFO", f"代理失败将自动重试，最多 {retries} 次")
 
     requested_mode = p.get("token_mode") or DEFAULT_TOKEN_MODE
     effective = _apply_token_mode(requested_mode)
     if effective != requested_mode:
-        job.push_log("WARNING", f"产出格式 {requested_mode} 不可用，已降级为 {effective}")
-    fmt_label = {"graph": "Graph 四段", "graph_recovery": "Graph 六段", "dual": "双令牌六段"}.get(
-        effective, effective
-    )
-    job.push_log("INFO", f"产出格式: {fmt_label}｜并发度 {job.concurrency}")
+        job.push_log(
+            "WARNING",
+            f"产出格式 {_token_mode_label(requested_mode)} 不可用，已改为 {_token_mode_label(effective)}",
+        )
+    job.push_log("INFO", f"产出格式: {_token_mode_label(effective)}｜并发 {job.concurrency}")
 
     # 优先引擎生成器；不可用则线程池兜底
     if _run_batch_iter(job, p):
         return
-    job.push_log("INFO", "register_batch_iter 不可用，使用线程池兜底并发 register_one")
+    job.push_log("INFO", "已改用备用并发模式")
     conc = max(1, min(job.concurrency, job.count))
     with ThreadPoolExecutor(max_workers=conc) as ex:
         futs = [ex.submit(_do_register_one, job, i, p) for i in range(job.count)]
@@ -943,7 +1135,7 @@ def _job_worker(job_id: str) -> None:
     _thread_job[threading.get_ident()] = job_id
     job.push_log(
         "INFO",
-        f"批次 {job.batch_label} 开始执行（{job.count} 个，并发 {job.concurrency}）",
+        f"批次 {job.batch_label} 开始（{job.count} 个，并发 {job.concurrency}）",
     )
     try:
         if job.params.get("dry_run"):
@@ -1054,6 +1246,19 @@ class VerifyBatchRequest(BaseModel):
 
 class ImportRequest(BaseModel):
     text: str = ""
+    source: str = ""
+    batch_label: str = ""
+    skip_incubation: bool = False
+
+
+class QoderjiImportRequest(BaseModel):
+    db_path: Optional[str] = None
+    statuses: Optional[list[str]] = None
+    batch_id: Optional[str] = None
+    limit: Optional[int] = None
+    batch_label: str = ""
+    skip_incubation: bool = True
+    dry_run: bool = False
 
 
 class ExportRequest(BaseModel):
@@ -1108,14 +1313,23 @@ def _startup_log() -> None:
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("SQLite 初始化失败: %s", exc)
-    if cf_domain_mail.cf_domain_backend_active() and cf_domain_mail.cf_configured():
+    if MAILBOX_API_ENABLED:
+        mailbox_gateway.bootstrap()
+        logger.info("Mailbox API v1 已挂载: /api/v1")
+    if coolhs_mail.coolhs_backend_active() and coolhs_mail.coolhs_configured():
+        logging.getLogger(__name__).info(
+            "proofs 收码后端: coolhs-mail %s (%s)",
+            coolhs_mail.load_config().domain,
+            coolhs_mail.load_config().base_url,
+        )
+    elif cf_domain_mail.cf_domain_backend_active() and cf_domain_mail.cf_configured():
         logging.getLogger(__name__).info(
             "proofs 收码后端: CF 域名 %s", cf_domain_mail.load_config().domain
         )
     elif not ext_recovery_pool.external_pool_enabled():
         logging.getLogger(__name__).warning(
-            "恢复邮箱未配置：请设置 OUTLOOK_RECOVERY_BACKEND=cf_domain（your-cf-domain.com）"
-            "或 OUTLOOK_EXTERNAL_RECOVERY_POOL_FILE + OUTLOOK_RECOVERY_IMAP_HOST"
+            "恢复邮箱未配置：请设置 OUTLOOK_RECOVERY_BACKEND=coolhs_mail"
+            "（COOLHS_MAIL_*）或 cf_domain，或 IMAP 池 OUTLOOK_EXTERNAL_RECOVERY_POOL_FILE"
         )
 
 
@@ -1124,22 +1338,53 @@ def index() -> HTMLResponse:
     return HTMLResponse(content=(STATIC_DIR / "index.html").read_text(encoding="utf-8"))
 
 
+@app.get("/login.html", response_class=HTMLResponse)
+def login_page() -> HTMLResponse:
+    return HTMLResponse(content=(STATIC_DIR / "login.html").read_text(encoding="utf-8"))
+
+
+class LoginRequest(BaseModel):
+    password: str = ""
+
+
+@app.post("/api/auth/login")
+def auth_login(req: LoginRequest, request: Request) -> JSONResponse:
+    """口令正确就种下 middleware 每次都会校验的 httponly 会话 cookie。"""
+    password = _console_password()
+    if not password:
+        return JSONResponse({"ok": True, "auth_required": False})
+    if secrets.compare_digest((req.password or "").strip(), password):
+        resp = JSONResponse({"ok": True, "auth_required": True})
+        _set_console_cookie(resp, password, request)
+        return resp
+    return JSONResponse(status_code=401, content={"ok": False, "error": "口令错误"})
+
+
+@app.post("/api/auth/logout")
+def auth_logout() -> JSONResponse:
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(CONSOLE_SESSION_COOKIE, path="/")
+    return resp
+
+
+@app.get("/api/auth/check")
+def auth_check() -> JSONResponse:
+    """能走到这个路由，说明 middleware 已经认了请求里的 cookie 或口令头。"""
+    return JSONResponse({"ok": True, "auth_required": bool(_console_password())})
+
+
 @app.get("/api/config")
 def get_config() -> JSONResponse:
     # 代理不回显；captcha.run key 以数据库为主，回显「是否已存 + 掩码」，不回明文。
     proxy = ""
     captcha_key = (os.environ.get("CAPTCHA_RUN_API_KEY") or app_db.get_setting("CAPTCHA_RUN_API_KEY") or "").strip()
     cf_active = cf_domain_mail.cf_domain_backend_active() and cf_domain_mail.cf_configured()
+    coolhs_active = coolhs_mail.coolhs_backend_active() and coolhs_mail.coolhs_configured()
     recovery_pool_configured = ext_recovery_pool.external_pool_enabled()
-    recovery_configured = cf_active or recovery_pool_configured
+    recovery_configured = cf_active or coolhs_active or recovery_pool_configured
     recovery_backend = cf_domain_mail.recovery_backend()
-    env_mode = DEFAULT_TOKEN_MODE
-    if env_mode in ("login_exe", "recovery"):
-        default_product = "graph_recovery"
-    elif cf_active or env_mode == "graph":
-        default_product = "graph_recovery"
-    else:
-        default_product = "graph"
+    env_mode = _ENV_TOKEN_MODE
+    default_product = DEFAULT_TOKEN_MODE  # 固定 graph_recovery
     return JSONResponse(
         {
             "proxy": proxy,
@@ -1159,6 +1404,8 @@ def get_config() -> JSONResponse:
             "product_modes": PRODUCT_MODES,
             "default_token_mode": default_product,
             "mail_token_mode_env": env_mode,
+            "incubation_hours": lifecycle.incubation_hours(),
+            "default_export_format": "recovery",
             "dual_ready": DUAL_READY,
             "batch_ready": BATCH_READY,
             "keepalive_ready": KEEPALIVE_READY,
@@ -1166,6 +1413,7 @@ def get_config() -> JSONResponse:
             "export_formats": EXPORT_FORMATS,
             "recovery_pool_configured": recovery_pool_configured,
             "cf_domain_configured": cf_active,
+            "coolhs_mail_configured": coolhs_active,
             "recovery_backend": recovery_backend,
             "recovery_configured": recovery_configured,
             "proxy_pool": proxy_pool.pool_stats(),
@@ -1231,7 +1479,7 @@ def start_register(req: RegisterRequest) -> JSONResponse:
     if req.count < 1:
         raise HTTPException(status_code=400, detail="数量至少为 1。")
     if not req.dry_run and req.count > 20:
-        raise HTTPException(status_code=400, detail="真实注册单次上限 20，请分批。")
+        raise HTTPException(status_code=400, detail="单次最多注册 20 个，请分批。")
     if not req.dry_run:
         # DB 为主：页面填了就落库；没填则回读库里已存的 key。
         provided_key = (req.captcha_key or "").strip()
@@ -1251,12 +1499,12 @@ def start_register(req: RegisterRequest) -> JSONResponse:
             if stats.get("enabled", 0) < 1 and not proxy:
                 raise HTTPException(
                     status_code=400,
-                    detail="代理池为空。请在「代理池」页添加，或在注册页填写代理（会自动写入数据库）。",
+                    detail="代理池为空。请先添加代理，或在注册页填写备用代理。",
                 )
         elif not proxy:
             raise HTTPException(status_code=400, detail="请填写代理或启用「使用代理池」。")
         if not captcha_key:
-            raise HTTPException(status_code=400, detail="请填写 captcha.run Key（Web 页对应输入框，会存入数据库，下次免填）。")
+            raise HTTPException(status_code=400, detail="请填写 captcha.run Key。")
     concurrency = max(1, min(int(req.concurrency or 1), req.count))
 
     with _jobs_lock:
@@ -1309,7 +1557,7 @@ def list_jobs() -> JSONResponse:
 def get_job(job_id: str) -> JSONResponse:
     job = _jobs.get(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="任务不存在")
+        raise HTTPException(status_code=404, detail="任务不存在。")
     return JSONResponse(job.snapshot())
 
 
@@ -1317,7 +1565,7 @@ def get_job(job_id: str) -> JSONResponse:
 def job_events(job_id: str) -> StreamingResponse:
     job = _jobs.get(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="任务不存在")
+        raise HTTPException(status_code=404, detail="任务不存在。")
 
     def gen():
         yield f"data: {json.dumps({'type': 'snapshot', 'snapshot': job.snapshot()}, ensure_ascii=False)}\n\n"
@@ -1455,6 +1703,29 @@ def export_accounts_all() -> PlainTextResponse:
     return PlainTextResponse(body, headers={"Content-Disposition": "attachment; filename=accounts_combo.txt"})
 
 
+@app.get("/api/export/long-lived")
+def export_long_lived(min_days: float = Query(7.0, ge=0.0)) -> PlainTextResponse:
+    """导出存活满 min_days 天、非孵化、含 recovery 的六段 combo。"""
+    rows = _load_accounts()
+    lines: list[str] = []
+    for r in rows:
+        if not lifecycle.is_long_lived(r, min_days=min_days):
+            continue
+        line = lifecycle.combo_recovery_line(r)
+        if line:
+            lines.append(line)
+    body = "\n".join(lines) + ("\n" if lines else "")
+    return PlainTextResponse(
+        body,
+        headers={
+            "Content-Disposition": "attachment; filename=long_lived.txt",
+            "X-Export-Total": str(len(lines)),
+            "X-Export-Min-Days": str(min_days),
+            "Access-Control-Expose-Headers": "X-Export-Total,X-Export-Min-Days",
+        },
+    )
+
+
 @app.post("/api/accounts/export")
 def export_accounts(req: ExportRequest) -> PlainTextResponse:
     fmt = req.format if req.format in EXPORT_FORMATS else "graph"
@@ -1490,78 +1761,50 @@ def export_accounts(req: ExportRequest) -> PlainTextResponse:
 
 @app.post("/api/accounts/import")
 def import_accounts(req: ImportRequest) -> JSONResponse:
-    """自动识别 4 段/6 段：均写入 accounts.txt（graph 四段）；6 段额外写 accounts_dual.txt
-    并把登录令牌存进 meta，便于之后 6 段导出。按邮箱去重、校验字段。"""
-    existing = {r["email"] for r in _load_accounts()}
-    imported = duplicate = invalid = six_seg = 0
-    seen: set[str] = set()
-    graph_lines: list[str] = []
-    dual_lines: list[str] = []
-    dual_meta: dict[str, dict[str, str]] = {}
-    for raw in (req.text or "").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        parts = line.split("----")
-        if len(parts) < 4:
-            invalid += 1
-            continue
-        email = parts[0].strip()
-        if not email or "@" not in email:
-            invalid += 1
-            continue
-        if email in existing or email in seen:
-            duplicate += 1
-            continue
-        seen.add(email)
-        graph_lines.append("----".join(parts[:4]))
-        imported += 1
-        # 6 段：email----pwd----graph_cid----graph_rt----login_cid----login_rt
-        if len(parts) >= 6 and parts[4].strip() and parts[5].strip():
-            six = "----".join(parts[:6])
-            dual_lines.append(six)
-            dual_meta[email] = {
-                "combo_dual": six,
-                "login_client_id": parts[4].strip(),
-                "login_refresh_token": parts[5].strip(),
-            }
-            six_seg += 1
-    if graph_lines or dual_lines:
-        now = datetime.now().isoformat()
-        with _save_lock:
-            conn = app_db.connect()
-            try:
-                for ln in graph_lines:
-                    parts = ln.split("----")
-                    if len(parts) < 4:
-                        continue
-                    email = parts[0].strip()
-                    dual = dual_meta.get(email, {})
-                    account_store.upsert_account_dict(conn, {
-                        "email": email,
-                        "password": parts[1],
-                        "client_id": parts[2],
-                        "refresh_token": parts[3],
-                        "combo": ln,
-                        "combo_dual": dual.get("combo_dual", ""),
-                        "login_client_id": dual.get("login_client_id", ""),
-                        "login_refresh_token": dual.get("login_refresh_token", ""),
-                        "success": True,
-                        "created_at": now,
-                        "updated_at": now,
-                        "batch_id": "import",
-                        "batch_label": "导入",
-                        "legacy_source": "import",
-                    })
-                conn.commit()
-            finally:
-                conn.close()
-    for email, patch in dual_meta.items():
-        _update_meta(email, patch)
-    return JSONResponse(
-        {"ok": True, "imported": imported, "duplicate": duplicate,
-         "invalid": invalid, "six_seg": six_seg}
+    """粘贴导入：自动识别 4 段（graph）/ 6 段（末两段为登录令牌）combo，按邮箱去重。
+
+    ``source`` / ``batch_label`` / ``skip_incubation`` 均可选，供自有资产合并场景
+    （如从其他系统批量搬号）标记来源、跳过新号 48h 孵化期；不传时行为与老版本一致
+    （created_at=当前时间，仍受孵化期限制）。
+    """
+    result = external_import.import_text(
+        req.text,
+        source=req.source,
+        batch_label=req.batch_label,
+        skip_incubation=req.skip_incubation,
     )
+    return JSONResponse({
+        "ok": True,
+        "imported": result["imported"],
+        "duplicate": result["duplicate"],
+        "invalid": result["invalid"],
+        "six_seg": result["six_seg"],
+        "source": result["source"],
+        "batch_label": result["batch_label"],
+        "skip_incubation": result["skip_incubation"],
+    })
+
+
+@app.post("/api/accounts/import/qoderji")
+def import_accounts_qoderji(req: QoderjiImportRequest) -> JSONResponse:
+    """从 qoderji（同机 /opt/qoderji，另一套系统）的 email_inventory 拉取已注册好的
+    Outlook combo 并入本地账号库。只读查询 qoderji 的 SQLite，从不写回。
+
+    默认排除 ``status=dead``（OAuth 永久失效）的行；默认 ``skip_incubation=True``，
+    这些号早已存活过一段时间，不需要再走本地新号的孵化期。
+    """
+    result = external_import.import_from_qoderji(
+        db_path=req.db_path,
+        statuses=tuple(req.statuses) if req.statuses else external_import.DEFAULT_QODERJI_STATUSES,
+        batch_id=req.batch_id,
+        limit=req.limit,
+        batch_label=req.batch_label,
+        skip_incubation=req.skip_incubation,
+        dry_run=req.dry_run,
+    )
+    if not result.get("ok"):
+        raise HTTPException(status_code=404, detail=result.get("error") or "未找到 qoderji 邮箱库")
+    return JSONResponse(result)
 
 
 @app.post("/api/accounts/delete")
@@ -1593,7 +1836,7 @@ def set_meta(req: MetaRequest) -> JSONResponse:
 
 def _verify_one(email: str, refresh_token: str, proxy_url: str, test_imap: bool) -> dict[str, Any]:
     if not refresh_token:
-        return {"ok": False, "email": email, "usable": [], "message": "缺少 refresh_token"}
+        return {"ok": False, "email": email, "usable": [], "message": "缺少读信令牌"}
 
     def _probe(via: str) -> dict[str, Any]:
         return graph_mail.probe_token(email or "unknown", refresh_token, proxy_url=via)
@@ -1653,13 +1896,13 @@ def _verify_one(email: str, refresh_token: str, proxy_url: str, test_imap: bool)
             usable.append("imap")
     res["ok"] = bool(usable)
     if "graph" in usable:
-        res["summary"] = "✅ 可用：Graph 令牌可读信（推荐）"
+        res["summary"] = "✅ 可读信"
     elif "outlook_rest" in usable:
-        res["summary"] = "✅ 可用：Outlook REST 令牌可读信"
+        res["summary"] = "✅ 备用接口可读信"
     elif res["imap"].get("ok"):
-        res["summary"] = "⚠️ 仅 IMAP 可用（老号）"
+        res["summary"] = "⚠️ 仅 IMAP 可用"
     else:
-        res["summary"] = "❌ 不可用：graph/outlook_rest/imap 均未通过"
+        res["summary"] = "❌ 不可用：读信校验未通过"
     return res
 
 
@@ -1680,7 +1923,7 @@ def verify_combo(req: VerifyComboRequest) -> JSONResponse:
         refresh_token = refresh_token or c_rt
     if not refresh_token:
         return JSONResponse({"ok": False, "email": email, "usable": [],
-                             "message": "缺少 refresh_token（该 combo 第四段为空，无法校验）。"})
+                             "message": "缺少读信令牌，无法校验。"})
     try:
         res = _verify_one(email, refresh_token, _proxy_url(req.proxy), req.test_imap)
         try:
@@ -1710,6 +1953,7 @@ def verify_combo(req: VerifyComboRequest) -> JSONResponse:
 def verify_batch(req: VerifyBatchRequest) -> JSONResponse:
     proxy_url = _proxy_url(req.proxy)
     tasks: list[tuple[str, str]] = []  # (email, refresh_token)
+    skipped: list[dict[str, Any]] = []
     if req.combos:
         for c in req.combos:
             e, _p, _c, rt = _split_combo(c)
@@ -1717,19 +1961,33 @@ def verify_batch(req: VerifyBatchRequest) -> JSONResponse:
                 tasks.append((e, rt))
     else:
         rows = _load_accounts()
+        by_email = {r["email"]: r for r in rows}
         want = set(req.emails) if req.emails else None
         for r in rows:
             if want is not None and r["email"] not in want:
                 continue
             if not r.get("refresh_token"):
                 continue
+            if r.get("incubating") or lifecycle.is_incubating(r.get("created_at")):
+                skipped.append({
+                    "email": r["email"],
+                    "ok": False,
+                    "skipped": True,
+                    "incubating": True,
+                    "incubation_until": r.get("incubation_until") or "",
+                    "usable": [],
+                    "summary": "孵化期中，暂不测活",
+                    "message": "孵化期中",
+                })
+                continue
             tasks.append((r["email"], r["refresh_token"]))
+        del by_email
 
-    if not tasks:
-        return JSONResponse({"ok": True, "results": [], "message": "无可校验账号（缺 refresh_token）。"})
+    if not tasks and not skipped:
+        return JSONResponse({"ok": True, "results": [], "message": "无可校验账号（缺少读信令牌）。"})
 
-    conc = max(1, min(int(req.concurrency or 4), 8, len(tasks)))
-    results: list[dict[str, Any]] = []
+    conc = max(1, min(int(req.concurrency or 4), 8, len(tasks) or 1))
+    results: list[dict[str, Any]] = list(skipped)
 
     def work(item: tuple[str, str]) -> dict[str, Any]:
         try:
@@ -1753,12 +2011,20 @@ def verify_batch(req: VerifyBatchRequest) -> JSONResponse:
             _cache_verify(r)
         return r
 
-    with ThreadPoolExecutor(max_workers=conc) as ex:
-        for f in as_completed([ex.submit(work, t) for t in tasks]):
-            results.append(f.result())
+    if tasks:
+        with ThreadPoolExecutor(max_workers=conc) as ex:
+            for f in as_completed([ex.submit(work, t) for t in tasks]):
+                results.append(f.result())
 
     ok_n = sum(1 for r in results if r.get("ok"))
-    return JSONResponse({"ok": True, "total": len(results), "usable": ok_n, "results": results})
+    skip_n = sum(1 for r in results if r.get("skipped"))
+    return JSONResponse({
+        "ok": True,
+        "total": len(results),
+        "usable": ok_n,
+        "skipped": skip_n,
+        "results": results,
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -1773,10 +2039,7 @@ def imap_enable() -> JSONResponse:
             "ok": False,
             "implemented": False,
             "required": False,
-            "message": "开启 IMAP 为可选项，非必需：默认走 Graph 令牌读信，不依赖 IMAP 协议开关。"
-            "主动开启（SetConsumerMailbox）需网页会话 OWA usertoken，纯 API 链路暂未产出；"
-            "且新号会返回 412（反滥用），约 10–24h 账号成熟后才可能开成。"
-            "确认某号 IMAP 状态请用『测活』勾选 IMAP。",
+            "message": "默认已用读信令牌收信，一般无需开启 IMAP。该功能暂不可用。",
         }
     )
 
@@ -1857,7 +2120,7 @@ def rescue_accounts(req: RescueRequest) -> JSONResponse:
         return JSONResponse({
             "ok": False,
             "implemented": False,
-            "message": "救援脚本 scripts.rescue_login 无法导入，暂不可用。",
+            "message": "重登功能暂不可用。",
             "results": [],
         })
     rows = _load_accounts()
@@ -1876,7 +2139,7 @@ def rescue_accounts(req: RescueRequest) -> JSONResponse:
             "total": 0,
             "ok_count": 0,
             "results": [],
-            "message": "无可救援账号（需有密码）。",
+            "message": "没有可重登的账号（需要密码）。",
         })
 
     proxy = rescue_proxy_raw((req.proxy or "").strip())
@@ -1953,24 +2216,34 @@ def keepalive(req: KeepaliveRequest) -> JSONResponse:
     """对选中（或全部）账号并发跑 keepalive_one：refresh→access→GET /me+列信→轮换回写。"""
     if not KEEPALIVE_READY or keepalive_one is None:
         return JSONResponse({"ok": False, "implemented": False,
-                             "message": "保活脚本 scripts.keepalive 无法导入，暂不可用。"})
+                             "message": "保活功能暂不可用。"})
     proxy_url = _proxy_url(req.proxy)
     rows = _load_accounts()
     want = set(req.emails) if req.emails else None
     tasks: list[tuple[str, str]] = []  # (email, combo_line)
+    skipped: list[dict[str, Any]] = []
     for r in rows:
         if want is not None and r["email"] not in want:
+            continue
+        if r.get("incubating") or lifecycle.is_incubating(r.get("created_at")):
+            skipped.append({
+                "email": r["email"],
+                "ok": False,
+                "skipped": True,
+                "incubating": True,
+                "detail": "孵化期中",
+            })
             continue
         line = r.get("combo_dual") or r.get("combo") or ""
         if not line or not r.get("has_token"):
             continue
         tasks.append((r["email"], line))
-    if not tasks:
+    if not tasks and not skipped:
         return JSONResponse({"ok": True, "implemented": True, "results": [],
-                             "message": "无可保活账号（缺 refresh_token）。"})
+                             "message": "无可保活账号（缺少读信令牌）。"})
 
-    conc = max(1, min(int(req.concurrency or 5), 5, len(tasks)))
-    results: list[dict[str, Any]] = []
+    conc = max(1, min(int(req.concurrency or 5), 5, len(tasks) or 1))
+    results: list[dict[str, Any]] = list(skipped)
 
     def work(item: tuple[str, str]) -> dict[str, Any]:
         email, line = item
@@ -1981,9 +2254,10 @@ def keepalive(req: KeepaliveRequest) -> JSONResponse:
         res.setdefault("email", email)
         return res
 
-    with ThreadPoolExecutor(max_workers=conc) as ex:
-        for f in as_completed([ex.submit(work, t) for t in tasks]):
-            results.append(f.result())
+    if tasks:
+        with ThreadPoolExecutor(max_workers=conc) as ex:
+            for f in as_completed([ex.submit(work, t) for t in tasks]):
+                results.append(f.result())
 
     # 回写轮换后的新 refresh_token（仅在真的轮换时写盘）
     with _save_lock:
@@ -1992,7 +2266,7 @@ def keepalive(req: KeepaliveRequest) -> JSONResponse:
                 _writeback_keepalive(r.get("email", ""), r["new_line"])
     # 缓存保活结果到 meta（作为测活状态）
     for r in results:
-        if r.get("skip"):
+        if r.get("skip") or r.get("skipped"):
             continue
         email = r.get("email")
         if not email:
@@ -2012,16 +2286,18 @@ def keepalive(req: KeepaliveRequest) -> JSONResponse:
 
     ok_n = sum(1 for r in results if r.get("ok"))
     rot_n = sum(1 for r in results if r.get("rotated"))
+    skip_n = sum(1 for r in results if r.get("skipped") or r.get("skip"))
     return JSONResponse({
         "ok": True, "implemented": True, "total": len(results),
-        "alive": ok_n, "rotated": rot_n,
+        "alive": ok_n, "rotated": rot_n, "skipped": skip_n,
         "results": [{
             "email": r.get("email"),
             "ok": bool(r.get("ok")),
             "profile": r.get("profile"),
             "message": r.get("message"),
             "rotated": bool(r.get("rotated")),
-            "skip": bool(r.get("skip")),
+            "skip": bool(r.get("skip") or r.get("skipped")),
+            "skipped": bool(r.get("skipped") or r.get("skip")),
             "detail": r.get("detail", ""),
         } for r in results],
     })
@@ -2034,7 +2310,7 @@ def replenish_pool_api(req: ReplenishRequest) -> JSONResponse:
         from outlook_api_reg.graph_mail import probe_token
         from outlook_api_reg.proof_pool import pool_path
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse({"ok": False, "implemented": False, "message": f"收码池模块不可用: {exc}"})
+        return JSONResponse({"ok": False, "implemented": False, "message": "收码池暂不可用。"})
     pool = pool_path() or (PROJECT_DIR.parent / "1000outlook.txt")
     pool = Path(pool)
     proxy_url = _proxy_url(req.proxy)
@@ -2178,7 +2454,7 @@ def add_proxy_pool(req: ProxyPoolAddRequest) -> JSONResponse:
             if line and not line.startswith("#"):
                 templates.append(line)
     if not templates:
-        raise HTTPException(status_code=400, detail="请提供至少一条代理模板。")
+        raise HTTPException(status_code=400, detail="请提供至少一条代理。")
     created = proxy_pool.add_proxies(
         templates,
         label=(req.label or "").strip(),
@@ -2246,7 +2522,7 @@ def bind_proxy_pool(req: ProxyPoolBindRequest) -> JSONResponse:
         raise HTTPException(status_code=404, detail="代理不存在。")
     resolved = proxy_pool.resolve_template(ent.get("template") or "")
     if not resolved:
-        raise HTTPException(status_code=400, detail="代理模板无效。")
+        raise HTTPException(status_code=400, detail="代理格式无效。")
     proxy_pool.bind_account(req.email.strip().lower(), req.proxy_id, resolved, purpose="manual")
     return JSONResponse({"ok": True, "email": req.email.strip().lower(), "resolved_masked": proxy_pool.mask_template(resolved)})
 
@@ -2269,6 +2545,8 @@ def health() -> JSONResponse:
             "dual_ready": DUAL_READY,
             "keepalive_ready": KEEPALIVE_READY,
             "rescue_ready": RESCUE_READY,
+            "mailbox_api": MAILBOX_API_ENABLED,
+            "auth_required": bool(_console_password()),
         }
     )
 

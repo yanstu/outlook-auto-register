@@ -1,0 +1,26 @@
+[Unit]
+Description=Outlook Auto Register Ops Console
+After=network.target
+
+[Service]
+Type=simple
+# webapp.server 以及 outlook_api_reg / scripts 都从仓库根导入，进程必须跑在这里。
+# 应用启动时 load_dotenv() 会读同目录的 .env（captcha key、代理、Mailbox API
+# admin key 等都在那里；deploy_to_38.sh 渲染，不入 git）。
+WorkingDirectory=/home/ubuntu/outlook-auto-register
+# 运维台登录口令：浏览器走 /login.html 种下的 httponly 会话 cookie，curl/脚本走
+# X-Console-Password 头，两条路都由 webapp/server.py 的 middleware 统一把关。
+# deploy_to_38.sh 用 OUTLOOK_CONSOLE_PASSWORD 替换掉这个占位符；留成空串等于
+# 整站不设防，只有本机开发时才可接受，公网域名下绝不允许。
+# 注意 Mailbox API（/api/v1）不受这道门管，它只认自己的 Bearer mbx_sk。
+Environment=OUTLOOK_CONSOLE_PASSWORD=__OUTLOOK_CONSOLE_PASSWORD__
+Environment=PYTHONUNBUFFERED=1
+ExecStartPre=/bin/sh -c 'fuser -k 8890/tcp 2>/dev/null || true'
+ExecStart=/home/ubuntu/outlook-auto-register/.venv/bin/python -m uvicorn webapp.server:app --host 127.0.0.1 --port 8890 --timeout-graceful-shutdown 8
+Restart=always
+RestartSec=3
+TimeoutStopSec=30
+KillMode=mixed
+
+[Install]
+WantedBy=default.target

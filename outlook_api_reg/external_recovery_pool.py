@@ -10,6 +10,8 @@
   imap（默认） — 本模块的第三方 IMAP 恢复邮箱池。
   cf_domain    — Cloudflare 域名 catch-all 邮箱（见 cf_domain_mail.py），无需预置账密，
                  按需在自有域名下生成随机地址并经 CF Worker API 收码。
+  coolhs_mail  — 自建 coolhs-mail（hook.coolhs.com，见 coolhs_mail.py），
+                 ``x-api-token`` + ``/api/mailbox/...``，域名如 mail.coolhs.com。
 """
 from __future__ import annotations
 
@@ -89,7 +91,7 @@ def iter_accounts(limit: int = 8) -> Iterator[ExternalRecovery]:
 
 
 def recovery_backend() -> str:
-    """proofs 恢复邮箱收码后端：``imap``（默认）或 ``cf_domain``。"""
+    """proofs 恢复邮箱收码后端：``imap``（默认）/ ``cf_domain`` / ``coolhs_mail``。"""
     from . import cf_domain_mail
     return cf_domain_mail.recovery_backend()
 
@@ -99,10 +101,15 @@ def external_pool_enabled() -> bool:
 
     - imap 后端：需 OUTLOOK_EXTERNAL_RECOVERY_POOL_FILE + OUTLOOK_RECOVERY_IMAP_HOST。
     - cf_domain 后端：需 CF Worker API/域名/管理员密码齐全（见 cf_domain_mail.cf_configured）。
+    - coolhs_mail 后端：需 COOLHS_MAIL_BASE_URL + COOLHS_MAIL_API_TOKEN + COOLHS_MAIL_DOMAIN。
     """
     if os.environ.get("OUTLOOK_EXTERNAL_RECOVERY", "1") == "0":
         return False
-    if recovery_backend() == "cf_domain":
+    backend = recovery_backend()
+    if backend == "cf_domain":
         from . import cf_domain_mail
         return cf_domain_mail.cf_configured()
+    if backend == "coolhs_mail":
+        from . import coolhs_mail
+        return coolhs_mail.coolhs_configured()
     return bool(pool_path() and imap_host())

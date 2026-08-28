@@ -51,12 +51,13 @@ def classify_proofs_view(
 
 
 def plan_recovery() -> Optional[dict]:
-    """分配恢复邮箱（CF 默认不打网络；IMAP 只读池文件）。"""
+    """分配恢复邮箱（CF/coolhs 按需建址；IMAP 只读池文件）。"""
     from outlook_api_reg import external_recovery_pool as ext_pool
 
     if not ext_pool.external_pool_enabled():
         return None
-    if ext_pool.recovery_backend() == "cf_domain":
+    backend = ext_pool.recovery_backend()
+    if backend == "cf_domain":
         from outlook_api_reg import cf_domain_mail
 
         client = cf_domain_mail.CFDomainMailClient()
@@ -66,6 +67,18 @@ def plan_recovery() -> Optional[dict]:
             "password": cf_domain_mail.recovery_placeholder(),
             "method": "browser_proofs",
             "backend": "cf_domain",
+            "client": client,
+        }
+    if backend == "coolhs_mail":
+        from outlook_api_reg import coolhs_mail
+
+        client = coolhs_mail.CoolhsMailClient()
+        address = coolhs_mail.allocate_address(client)
+        return {
+            "email": address,
+            "password": coolhs_mail.recovery_placeholder(),
+            "method": "browser_proofs",
+            "backend": "coolhs_mail",
             "client": client,
         }
     acct = next(iter(ext_pool.iter_accounts(limit=1)), None)
@@ -81,17 +94,17 @@ def plan_recovery() -> Optional[dict]:
 
 
 def _make_read_code(rec: dict, *, before_ids: Optional[set] = None, since_ts: float = 0.0) -> Callable[[], str]:
-    if rec.get("backend") == "cf_domain" and rec.get("client") is not None:
+    if rec.get("backend") in ("cf_domain", "coolhs_mail") and rec.get("client") is not None:
         client = rec["client"]
         addr = rec["email"]
         bids = set(before_ids or [])
 
-        def _read_cf() -> str:
+        def _read_http() -> str:
             return client.read_security_code(
                 addr, since_ts=time.time() - 30, before_ids=bids, timeout=150,
             )
 
-        return _read_cf
+        return _read_http
 
     from outlook_api_reg import external_recovery_pool as ext_pool
     from outlook_api_reg.mail_reader import read_security_code_imap_password
@@ -167,7 +180,7 @@ def bind_recovery_in_browser(page, log: Callable[..., None]) -> dict:
     """在当前页走 Add → 收码 → Verify。成功后页面应已离开 proofs。"""
     rec = plan_recovery()
     if not rec:
-        return {"ok": False, "note": "恢复邮箱未配置（CF 或 IMAP 池）"}
+        return {"ok": False, "note": "恢复邮箱未配置（coolhs_mail / CF / IMAP 池）"}
 
     out = {
         "ok": False,
@@ -183,7 +196,7 @@ def bind_recovery_in_browser(page, log: Callable[..., None]) -> dict:
         try:
             before_ids = rec["client"].snapshot_ids(rec["email"]) or set()
         except Exception as exc:  # noqa: BLE001
-            log("  CF 收件快照失败（继续）: %s", exc)
+            log("  收件快照失败（继续）: %s", exc)
 
     view = _wait_view(page, ("add",), 20)
     if view != "add":

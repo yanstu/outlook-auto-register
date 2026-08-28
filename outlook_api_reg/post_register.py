@@ -99,7 +99,7 @@ def submit_consent(http: OutlookHttpSession, resp: requests.Response) -> Optiona
         )
         return None
     action = resp.url  # account.live.com/Consent/Update?...&ru=login.live.com/oauth20_authorize.srf...
-    logger.info("提交 OAuth 同意授权 ucaction=Yes (client_id=%s)", client_id)
+    logger.info("提交授权同意")
     return http.post(
         action,
         data={
@@ -459,6 +459,7 @@ def satisfy_proofs_with_external(
     收码后端由 OUTLOOK_RECOVERY_BACKEND 切换：
       imap（默认） — login.exe 同款第三方 IMAP 恢复邮箱池（your-recovery-host.com 等）。
       cf_domain    — Cloudflare 域名 catch-all 邮箱：按需生成 xxxx@域名，经 CF Worker API 收码。
+      coolhs_mail  — 自建 coolhs-mail（hook.coolhs.com）：按需生成 @mail.coolhs.com，经 HTTP API 收码。
     """
     from . import external_recovery_pool as ext_pool
 
@@ -474,8 +475,14 @@ def satisfy_proofs_with_external(
     add_canary = add_form["fields"].get("canary", "")
     referer = resp.url or add_action
 
-    if ext_pool.recovery_backend() == "cf_domain":
+    backend = ext_pool.recovery_backend()
+    if backend == "cf_domain":
         return _satisfy_proofs_cf_domain(
+            http, add_action=add_action, add_canary=add_canary, referer=referer,
+            max_accounts=max_accounts, country=country,
+        )
+    if backend == "coolhs_mail":
+        return _satisfy_proofs_coolhs_mail(
             http, add_action=add_action, add_canary=add_canary, referer=referer,
             max_accounts=max_accounts, country=country,
         )
@@ -586,6 +593,65 @@ def _satisfy_proofs_cf_domain(
             logger.info("proofs 外部恢复邮箱(CF域名)绑定成功 → %s", address)
             return r_next, meta
     logger.error("CF 域名恢复邮箱均未能满足 proofs（%d 次尝试）", max_accounts)
+    return None
+
+
+def _satisfy_proofs_coolhs_mail(
+    http: OutlookHttpSession,
+    *,
+    add_action: str,
+    add_canary: str,
+    referer: str,
+    max_accounts: int,
+    country: str,
+) -> Optional[tuple[requests.Response, dict[str, str]]]:
+    """coolhs-mail 恢复邮箱后端：按需生成 @mail.coolhs.com + HTTP API 收码。"""
+    from . import coolhs_mail
+
+    try:
+        client = coolhs_mail.CoolhsMailClient()
+    except Exception as exc:  # noqa: BLE001
+        logger.error("coolhs-mail 后端初始化失败：%s", exc)
+        return None
+
+    placeholder = coolhs_mail.recovery_placeholder()
+    try:
+        max_try = int(os.environ.get("OUTLOOK_COOLHS_PROOF_MAX_ACCOUNTS", str(max_accounts)))
+    except ValueError:
+        max_try = max_accounts
+    for _i in range(max(1, max_try)):
+        try:
+            address = coolhs_mail.allocate_address(client)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("coolhs-mail 分配地址失败：%s", exc)
+            return None
+        logger.info("proofs 外部恢复邮箱(coolhs-mail)：分配 %s", address)
+
+        try:
+            before_ids = client.snapshot_ids(address)
+        except Exception:  # noqa: BLE001
+            before_ids = set()
+
+        def _read(addr=address, bids=before_ids):
+            return client.read_security_code(
+                addr, since_ts=time.time() - 30, before_ids=bids, timeout=150,
+            )
+
+        r_next = _do_proof_round(
+            http, add_action=add_action, add_canary=add_canary, referer=referer,
+            recovery_email=address, country=country, read_code=_read,
+            log_label=address, tag="afterproof_coolhs",
+        )
+        if r_next is not None:
+            meta = {
+                "proofs_method": "coolhs_mail_recovery",
+                "recovery_email": address,
+                "recovery_password": placeholder,
+                "proofs_satisfied": "true",
+            }
+            logger.info("proofs 外部恢复邮箱(coolhs-mail)绑定成功 → %s", address)
+            return r_next, meta
+    logger.error("coolhs-mail 恢复邮箱均未能满足 proofs（%d 次尝试）", max_accounts)
     return None
 
 
@@ -1100,7 +1166,7 @@ def fetch_mail_oauth_code(
     info: dict[str, str] = {}
     for name, ep in endpoints:
         url = f"{ep}?{urllib.parse.urlencode(base_params)}"
-        logger.info("mail OAuth 授权(%s 端点)…", name)
+        logger.info("读信授权（%s）…", name)
         resp = http.get(url, allow_redirects=True)
         resp = follow_auto_post_forms(
             http, resp, tag=f"authorize_{name}", max_hops=12, proof_meta=proof_meta,
@@ -1110,10 +1176,10 @@ def fetch_mail_oauth_code(
         m = re.search(r"[?&]code=([^&]+)", final)
         if m:
             info["code"] = urllib.parse.unquote(m.group(1))
-            logger.info("获取 mail OAuth code 成功(%s 端点)", name)
+            logger.info("获取读信授权成功（%s）", name)
             return info
         _dump_html(f"authorize_{name}_final.html", resp.text or "")
-        logger.warning("(%s 端点) 未从跳转 URL 解析到 OAuth code: %s", name, final[:120])
+        logger.warning("（%s）未从跳转解析到授权码", name)
     return info
 
 
@@ -1153,13 +1219,10 @@ def exchange_code_for_token(
         if data.get(key) is not None:
             out[key] = str(data[key])
     if out.get("refresh_token"):
-        logger.info("token 交换成功，已获取 refresh_token")
+        logger.info("换取令牌成功，已获取读信令牌")
     elif out.get("id_token") or out.get("access_token"):
         # 拿到 id_token/access_token 但没 refresh_token → 多半是 scope 缺 offline_access
-        logger.warning(
-            "token 交换只返回 %s，无 refresh_token（scope 可能缺 offline_access）；granted_scope=%s",
-            "id_token" if out.get("id_token") else "access_token", out.get("scope", ""),
-        )
+        logger.warning("换取令牌只返回部分结果，未拿到读信令牌")
     return out
 
 
@@ -1202,7 +1265,8 @@ def fetch_login_token(
         if ltok.get("refresh_token"):
             out["status"] = "ok"
             out.pop("fail_reason", None)
-            logger.info(
+            logger.info("登录令牌获取成功")
+            logger.debug(
                 "token#2 成功(attempt=%d): refresh_token=True id_token=%s scope=%s",
                 i, bool(ltok.get("id_token")), ltok.get("scope", ""),
             )
@@ -1294,9 +1358,7 @@ def complete_oauth_after_signup(
                 info["login_status"] = "error"
                 info["login_fail_reason"] = str(exc)
             if not info.get("login_refresh_token"):
-                logger.warning("双令牌 token#2 最终未产出 refresh_token，本号回落只存四段"
-                               "（status=%s reason=%s）",
-                               info.get("login_status"), info.get("login_fail_reason", ""))
+                logger.warning("双令牌最终未产出读信令牌，本号回落只存四段")
 
     logger.info("注册后登录链路完成: logged_in=%s mail_refresh=%s login_refresh=%s",
                 info.get("logged_in"), bool(info.get("mail_refresh_token")),

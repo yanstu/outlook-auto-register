@@ -12,7 +12,13 @@
 | `proxies` / `proxy_bindings` / `proxy_settings` | 代理池（模板、sticky 绑定、分配策略） |
 | `proxy_events` | 代理使用事件（代理商×代理国×注册国成功率统计） |
 | `rescue_events` | 重登事件日志 |
+| `api_principals` | Mailbox API 的调用方（service key / 用户端），只存 pbkdf2 摘要 |
+| `api_grants` | 某个调用方能看哪些邮箱（email 为空 = 全部）与 scope 覆盖 |
+| `api_sessions` | 用户端登录会话（绑定单个邮箱、带有效期） |
+| `api_audit` | Mailbox API 访问记录（时间、路径、邮箱、状态），不含令牌 |
 | `app_meta` | 迁移标记、最近备份时间 |
+
+`api_*` 四张表随 schema v4 引入，老库启动时自动补齐，见 [MAILBOX_API.md](MAILBOX_API.md)。
 
 ## 首次启动
 

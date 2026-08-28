@@ -76,10 +76,12 @@ _MS_KEYWORDS = (
 # ---------------------------------------------------------------------------
 
 def recovery_backend() -> str:
-    """proofs 恢复邮箱收码后端：``imap``（默认）或 ``cf_domain``。"""
+    """proofs 恢复邮箱收码后端：``imap``（默认）/ ``cf_domain`` / ``coolhs_mail``。"""
     raw = os.environ.get("OUTLOOK_RECOVERY_BACKEND", "imap").strip().lower()
     if raw in ("cf", "cfdomain", "cf_domain", "cfworker", "catchall", "catch_all"):
         return "cf_domain"
+    if raw in ("coolhs", "coolhs_mail", "coolhsmail", "hook_coolhs", "hook.coolhs"):
+        return "coolhs_mail"
     return "imap"
 
 

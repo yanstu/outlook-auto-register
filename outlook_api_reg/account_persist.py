@@ -38,6 +38,8 @@ def recovery_from_mapping(data: dict[str, Any]) -> tuple[str, str]:
         method = str(data.get("proofs_method") or "")
         if method == "cf_domain_recovery":
             rec_p = "cf_domain"
+        elif method == "coolhs_mail_recovery":
+            rec_p = "coolhs_mail"
     return rec_e, rec_p
 
 
@@ -65,6 +67,8 @@ def enrich_register_result(result: RegisterResult) -> RegisterResult:
         method = str((result.extra or {}).get("proofs_method") or "")
         if method == "cf_domain_recovery":
             result.recovery_password = "cf_domain"
+        elif method == "coolhs_mail_recovery":
+            result.recovery_password = "coolhs_mail"
     return result
 
 
