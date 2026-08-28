@@ -1646,6 +1646,7 @@ def _is_graph_readable(row: dict[str, Any]) -> bool:
 
 
 def _compute_stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """遗留口径：给仍会一次性拿全量 rows 的调用方（导出/保活等）用。"""
     today = datetime.now().strftime("%Y-%m-%d")
     total = len(rows)
     with_token = sum(1 for r in rows if r.get("has_token"))
@@ -1673,10 +1674,44 @@ def _compute_stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _overview_stats() -> dict[str, Any]:
+    stats = account_store.overview_stats()
+    stats["recovery_pool_configured"] = ext_recovery_pool.external_pool_enabled()
+    return stats
+
+
 @app.get("/api/accounts")
-def list_accounts() -> JSONResponse:
-    rows = _load_accounts()
-    return JSONResponse({"count": len(rows), "accounts": rows, "stats": _compute_stats(rows)})
+def list_accounts(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    q: str = Query(""),
+    batch: str = Query("all"),
+    view: str = Query("all"),
+) -> JSONResponse:
+    """账号池列表：服务端分页 + 过滤，列表行不带完整 refresh_token/combo（体量大，
+    详情弹窗走 /api/accounts/{email} 单独取）。近万条账号时 limit=50 也能几百 KB
+    内、秒级返回。
+    """
+    app_db.ensure_initialized(ACCOUNTS_DIR)
+    filters = {"q": q, "batch": batch, "view": view}
+    total = account_store.count_accounts(filters)
+    rows = account_store.list_accounts_page(limit=limit, offset=offset, q=q, batch=batch, view=view)
+    return JSONResponse(
+        {
+            "total": total,
+            "count": len(rows),
+            "limit": limit,
+            "offset": offset,
+            "accounts": rows,
+            "stats": _overview_stats(),
+        }
+    )
+
+
+@app.get("/api/accounts/stats")
+def accounts_stats() -> JSONResponse:
+    """轻量概览统计（总数/有令牌/可用/失活/未测/今日新增/批次分布），不带任何账号明细。"""
+    return JSONResponse(_overview_stats())
 
 
 def _format_combo(row: dict[str, Any], fmt: str) -> str:
@@ -1827,6 +1862,41 @@ def set_meta(req: MetaRequest) -> JSONResponse:
         raise HTTPException(status_code=400, detail="无可更新字段。")
     _update_meta(req.email, patch)
     return JSONResponse({"ok": True, "email": req.email, **patch})
+
+
+@app.get("/api/accounts/{email}")
+def get_account_detail(email: str) -> JSONResponse:
+    """单号完整详情（密码 / 完整读信令牌 / 六段 combo 等），给详情弹窗用。
+
+    必须放在本文件里所有 /api/accounts/<literal> 路由（export/import/delete/meta/
+    stats）之后：FastAPI 按注册顺序匹配，字面量路径要先于这个 {email} 通配路由。
+    """
+    acc = account_store.get_account(email)
+    if not acc:
+        raise HTTPException(status_code=404, detail="账号不存在。")
+    batch_map = _batch_index()
+    _apply_batch(
+        acc,
+        {"batch_id": acc.get("batch_id"), "batch_no": acc.get("batch_no"), "batch_label": acc.get("batch_label")},
+        batch_map,
+    )
+    rescue_n = account_store.rescue_count_for_email(email)
+    if rescue_n:
+        acc["rescue_count"] = max(int(acc.get("rescue_count") or 0), rescue_n)
+    meta_entry = {"verify": acc.get("verify")}
+    if not acc.get("updated_at"):
+        acc["updated_at"] = _best_updated_at(acc, meta_entry)
+    if not acc.get("last_alive_at"):
+        acc["last_alive_at"] = _best_last_alive(acc, meta_entry)
+    end_dt = _survival_end_at(acc, meta_entry)
+    acc["survival_end_at"] = _dt_iso(end_dt) if end_dt else ""
+    acc["alive_seconds"] = _compute_alive_seconds(str(acc.get("created_at") or ""), end_dt)
+    if not acc.get("combo"):
+        acc["combo"] = "----".join(
+            [acc.get("email", ""), acc.get("password", ""), acc.get("client_id", ""), acc.get("refresh_token", "")]
+        )
+    acc["has_token"] = bool(acc.get("refresh_token"))
+    return JSONResponse(acc)
 
 
 # ---------------------------------------------------------------------------

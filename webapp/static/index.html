@@ -49,7 +49,8 @@
     font-size:13px; font-weight:500; cursor:pointer; border:0; background:transparent; width:100%; text-align:left; margin-bottom:2px; }
   .nav:hover { background:var(--bg-hover); color:var(--fg); }
   .nav.active { background:var(--brand-soft); color:var(--brand-hover); font-weight:600; }
-  .nav .ic { width:16px; text-align:center; opacity:.9; }
+  .nav .ic { width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; opacity:.9; }
+  .nav .ic svg { width:16px; height:16px; display:block; }
   .nav .count { margin-left:auto; font-size:11px; font-family:var(--font-mono); color:var(--fg-4); }
   .nav.active .count { color:var(--brand-hover); }
   .sb-foot { margin-top:auto; border-top:1px solid var(--border); padding:12px 14px; font-size:11.5px; color:var(--fg-3); display:flex; flex-direction:column; gap:6px; }
@@ -254,7 +255,8 @@
   }
   .pool-search-field:focus-within { background:var(--bg-card); border-color:var(--brand); box-shadow:0 0 0 3px var(--brand-ring); }
   .pool-search-field input { border:0; background:transparent; box-shadow:none !important; padding:0; min-height:0; height:auto; }
-  .pool-search-icon { color:var(--fg-4); flex-shrink:0; }
+  .pool-search-icon { width:16px; height:16px; color:var(--fg-4); flex-shrink:0; display:inline-flex; }
+  .pool-search-icon svg { width:16px; height:16px; display:block; }
   .pool-compact-select { width:auto; min-width:108px; height:32px; min-height:32px; padding:0 28px 0 10px; font-size:12px; border-radius:8px; }
   .pool-toolbar-sp { flex:1; min-width:8px; }
   .sel-chip { color:var(--fg-3); font-size:12px; white-space:nowrap; flex-shrink:0; }
@@ -297,7 +299,7 @@
 
   .cell-main { display:flex; align-items:center; gap:4px; min-width:0; }
   .cell-main .val { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .pwd-mask { letter-spacing:.2em; color:var(--fg-3); user-select:none; }
+  .pwd-mask { letter-spacing:0; color:var(--fg-3); user-select:none; }
   .icon-btn {
     flex-shrink:0; width:22px; height:22px; padding:0; border:0; border-radius:6px;
     background:transparent; color:var(--fg-4); cursor:pointer; display:inline-flex; align-items:center; justify-content:center;
@@ -377,13 +379,13 @@
     </div>
     <div class="sb-group">
       <div class="sb-title">工作台</div>
-      <button class="nav active" data-sec="overview"><span class="ic">▤</span> 概览</button>
-      <button class="nav" data-sec="register"><span class="ic">✦</span> 批次注册</button>
-      <button class="nav" data-sec="proxies"><span class="ic">⇄</span> 代理池 <span class="count" id="navProxyCount">0</span></button>
-      <button class="nav" data-sec="proxy-stats"><span class="ic">◔</span> 代理统计</button>
-      <button class="nav" data-sec="pool"><span class="ic">▦</span> 账号池 <span class="count" id="navPoolCount">0</span></button>
-      <button class="nav" data-sec="verify"><span class="ic">◈</span> 测活</button>
-      <button class="nav" data-sec="ops"><span class="ic">◐</span> 保活</button>
+      <button class="nav active" data-sec="overview"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg></span> 概览</button>
+      <button class="nav" data-sec="register"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg></span> 批次注册</button>
+      <button class="nav" data-sec="proxies"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M9 6h5a4 4 0 0 1 4 4v5"/><path d="m15 12 3 3 3-3"/><path d="M15 18h-5a4 4 0 0 1-4-4V9"/></svg></span> 代理池 <span class="count" id="navProxyCount">0</span></button>
+      <button class="nav" data-sec="proxy-stats"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 16 4-5 4 3 5-7"/></svg></span> 代理统计</button>
+      <button class="nav" data-sec="pool"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 11v6c0 1.7 4 3 9 3s9-1.3 9-3v-6"/></svg></span> 账号池 <span class="count" id="navPoolCount">0</span></button>
+      <button class="nav" data-sec="verify"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3v8Z"/><path d="m9 12 2 2 4-4"/></svg></span> 测活</button>
+      <button class="nav" data-sec="ops"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2-7 4 14 2-7h6"/><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.9-8.6a5.5 5.5 0 0 0-.1-7.8Z"/></svg></span> 保活</button>
     </div>
     <div class="sb-foot">
       <div><span class="dot off" id="footDot"></span><span id="footHealth">检测中…</span></div>
@@ -618,7 +620,7 @@
         <div class="pool-page">
           <div class="pool-cockpit-toolbar">
             <div class="pool-search-field">
-              <span class="pool-search-icon">⌕</span>
+              <span class="pool-search-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
               <input type="text" id="poolSearch" placeholder="搜索邮箱" />
             </div>
             <select class="pool-compact-select" id="filterView">
@@ -836,7 +838,10 @@
 
 const $ = (id) => document.getElementById(id);
 let CFG = {};
-let ACCOUNTS = [];
+let ACCOUNTS = [];       // 当前页账号行（服务端已分页，不再是全量）
+let TOTAL_POOL = 0;      // 账号池总数（不受筛选影响），来自 stats.total
+let TOTAL_FILTERED = 0;  // 当前筛选条件下命中总数，用于分页
+let BATCH_OPTIONS = [];  // 批次下拉选项（来自服务端聚合，不再扫全量账号算）
 let SELECTED = new Set();
 let PAGE = 1; const PAGE_SIZE = 50;
 let FILTER = { view:'all', batch:'all', q:'' };
@@ -852,20 +857,20 @@ function _parseIso(raw){
 }
 function fmtFullTime(raw){
   const d=_parseIso(raw);
-  if(!d) return raw ? String(raw).replace('T',' ').replace(/\.\d+/,'').slice(0,19) : '—';
+  if(!d) return raw ? String(raw).replace('T',' ').replace(/\.\d+/,'').slice(0,19) : '暂无';
   const p=n=>String(n).padStart(2,'0');
   return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 function fmtShortTime(raw){
   const d=_parseIso(raw);
-  if(!d) return raw ? String(raw).replace('T',' ').slice(5,16) : '—';
+  if(!d) return raw ? String(raw).replace('T',' ').slice(5,16) : '暂无';
   const p=n=>String(n).padStart(2,'0');
   return `${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 function fmtAge(sec){
-  if(sec==null || sec==='') return '—';
+  if(sec==null || sec==='') return '暂无';
   const n=Number(sec);
-  if(!Number.isFinite(n) || n<0) return '—';
+  if(!Number.isFinite(n) || n<0) return '暂无';
   if(n<60) return '刚刚';
   if(n<3600) return Math.floor(n/60)+' 分钟';
   if(n<86400) return Math.floor(n/3600)+' 小时';
@@ -892,7 +897,7 @@ function rescueTip(a){
 }
 function fmtRescueCount(a){
   const n=Number(a.rescue_count)||0;
-  return n?`${n}次`:'—';
+  return n?`${n}次`:'暂无';
 }
 function copy(t){ navigator.clipboard.writeText(t).then(()=>toast('已复制')); }
 function accountByEmail(email){ return ACCOUNTS.find(x=>x.email===email); }
@@ -909,17 +914,17 @@ const ICO_INFO='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strok
 const ICO_REFRESH='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>';
 const ICO_TRASH='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>';
 function cellWithCopy(email, field, display){
-  if(!display) return `<span class="rec-none">—</span>`;
+  if(!display) return `<span class="rec-none">暂无</span>`;
   return `<div class="cell-main"><span class="val mono" title="${escHtml(display)}">${escHtml(trunc(display,22))}</span>
     <button type="button" class="icon-btn" title="复制" data-act="copy-field" data-email="${escHtml(email)}" data-field="${field}">${COPY_ICON}</button></div>`;
 }
 function cellPassword(email, password){
-  if(!password) return `<span class="rec-none">—</span>`;
-  return `<div class="cell-main"><span class="val mono pwd-mask" title="密码已隐藏，点图标复制">••••••••</span>
+  if(!password) return `<span class="rec-none">暂无</span>`;
+  return `<div class="cell-main"><span class="val mono pwd-mask" title="密码已隐藏，点图标复制">已隐藏</span>
     <button type="button" class="icon-btn" title="复制密码" data-act="copy-field" data-email="${escHtml(email)}" data-field="password">${COPY_ICON}</button></div>`;
 }
 function copyIconBtn(val){
-  if(!val) return '<span class="rec-none">—</span>';
+  if(!val) return '<span class="rec-none">暂无</span>';
   const safe=String(val).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
   return `<div class="cell-main"><span class="val mono">${escHtml(trunc(val,12))}</span>
     <button type="button" class="icon-btn" title="复制" onclick="copy('${safe}')">${COPY_ICON}</button></div>`;
@@ -932,8 +937,8 @@ function tokenStatusMain(a){
   const v=a.verify, hasToken=a.has_token;
   if(!hasToken) return `<span class="tok-main bad">无令牌</span>`;
   if(!v) return `<span class="tok-main unk">未测活</span>`;
-  if(v.ok || v.graph) return `<span class="tok-main ok">✓ 可读信</span>`;
-  return `<span class="tok-main bad">✗ 令牌失效</span>`;
+  if(v.ok || v.graph) return `<span class="tok-main ok">可读信</span>`;
+  return `<span class="tok-main bad">令牌失效</span>`;
 }
 function tokenStatusDetail(a){
   if(a.incubating){
@@ -950,12 +955,26 @@ function tokenStatusDetail(a){
   </div>`;
 }
 let DETAIL_EMAIL='';
+let DETAIL_ACCOUNT=null; // showAccountDetail 拉到的完整详情，供复制四段/六段按钮直接用
 let _detailCopyStore={};
-function showAccountDetail(email){
-  const a=accountByEmail(email); if(!a) return;
+async function fetchAccountDetail(email){
+  const r=await api('/api/accounts/'+encodeURIComponent(email));
+  if(!r.ok) throw new Error('账号不存在或加载失败');
+  return r.json();
+}
+async function showAccountDetail(email){
+  // 列表行是瘦身过的（无完整令牌/combo），详情弹窗单独向服务端要这一个账号的全量字段。
   DETAIL_EMAIL=email;
+  DETAIL_ACCOUNT=null;
   _detailCopyStore={};
-  $('detailTitle').textContent=a.email;
+  $('detailTitle').textContent=email;
+  $('detailBody').innerHTML='<div class="hint" style="margin:0;">加载中…</div>';
+  $('detailModal').classList.add('show');
+  let a;
+  try { a=await fetchAccountDetail(email); }
+  catch(e){ $('detailBody').innerHTML=`<div class="hint" style="margin:0;">加载失败：${escHtml(String(e.message||e))}</div>`; return; }
+  if(DETAIL_EMAIL!==email) return; // 弹窗已切换到别的账号，这份响应作废
+  DETAIL_ACCOUNT=a;
   const c6=combo6(a);
   const v=a.verify;
   $('detailBody').innerHTML=`
@@ -964,21 +983,21 @@ function showAccountDetail(email){
       ${detailRow('邮箱', a.email, 'email')}
       ${detailRow('密码', a.password, 'pwd')}
       ${detailRow('应用编号', a.client_id, 'cid')}
-      ${detailRow('恢复邮箱', a.recovery_email||'—', a.recovery_email?'rec_em':null)}
-      ${detailRow('读信令牌', a.refresh_token||'—', a.refresh_token?'rt':null, true)}
-      ${detailRow('恢复密码', a.recovery_password||'—', a.recovery_password?'rec_pw':null)}
+      ${detailRow('恢复邮箱', a.recovery_email||'暂无', a.recovery_email?'rec_em':null)}
+      ${detailRow('读信令牌', a.refresh_token||'暂无', a.refresh_token?'rt':null, true)}
+      ${detailRow('恢复密码', a.recovery_password||'暂无', a.recovery_password?'rec_pw':null)}
     </div>
     <div class="detail-section">读信 · ${a.incubating?'孵化中':(v&&v.ok?'可读信':(v?'令牌失效':'尚未测活'))}</div>
     ${tokenStatusDetail(a)}
     <div class="detail-section">导出行</div>
     <div class="detail-grid">
-      ${detailRow('四段', a.combo||'—', a.combo?'c4':null, true)}
-      ${detailRow('六段', c6||'—', c6?'c6':null, true)}
+      ${detailRow('四段', a.combo||'暂无', a.combo?'c4':null, true)}
+      ${detailRow('六段', c6||'暂无', c6?'c6':null, true)}
     </div>
     <div class="detail-section">其它</div>
     <div class="detail-grid">
-      ${detailRow('来源', a.source||'—', null)}
-      ${detailRow('批次', a.batch_label || (a.batch_no ? ('B'+a.batch_no) : '—'), null)}
+      ${detailRow('来源', a.source||'暂无', null)}
+      ${detailRow('批次', a.batch_label || (a.batch_no ? ('B'+a.batch_no) : '暂无'), null)}
       ${detailRow('注册时间', fmtFullTime(a.created_at), null)}
       ${detailRow('存活时间', fmtSurvivalAge(a), null)}
       ${detailRow('存活区间', survivalTip(a), null)}
@@ -987,11 +1006,10 @@ function showAccountDetail(email){
       ${detailRow('更新时间', fmtFullTime(a.updated_at), null)}
       ${detailRow('最近存活', fmtFullTime(a.last_alive_at), null)}
     </div>`;
-  $('detailModal').classList.add('show');
 }
 function detailRow(label, value, copyKey, wide){
-  const show=value||'—';
-  if(copyKey && value && value!=='—') _detailCopyStore[copyKey]=value;
+  const show=value||'暂无';
+  if(copyKey && value && value!=='暂无') _detailCopyStore[copyKey]=value;
   const copyBtn=copyKey
     ? `<button type="button" class="icon-btn" title="复制" data-act="copy-store" data-copy-key="${copyKey}">${COPY_ICON}</button>` : '';
   return `<div class="drow${wide?' span-2':''}"><div class="dlabel">${label}</div><div class="dval" title="${escHtml(show)}">${escHtml(show)}</div>${copyBtn}</div>`;
@@ -1071,11 +1089,13 @@ async function loadConfig(){
     $('captchaKey').value = savedKey || DEFAULT_CAPTCHA_KEY;
     $('count').value = '1';
     $('concurrency').value = '1';
-    $('cfgHint').textContent = '已填好打码 Key。默认使用代理池，池为空时请填写备用代理。';
+    const poolN=(c.proxy_pool&&c.proxy_pool.enabled)||0;
+    const keyHint = (savedKey || c.captcha_key_set) ? '已配置打码 Key。' : '未配置打码 Key，请在下方填写。';
+    const poolHint = poolN ? `默认使用代理池（${poolN} 条）。` : '代理池为空，请填写备用代理或先添加代理。';
+    $('cfgHint').textContent = keyHint + poolHint;
     const fmtLabel={graph:'四段（读信）',dual:'六段（双令牌）',recovery:'六段（含恢复邮箱，推荐）'};
     $('exportFmt').innerHTML = (c.export_formats||['graph']).map(f=>`<option value="${f}">${fmtLabel[f]||f}</option>`).join('');
     $('exportFmt').value = c.default_export_format || 'recovery';
-    const poolN=(c.proxy_pool&&c.proxy_pool.enabled)||0;
     $('footEngine').textContent = poolN?`代理池 ${poolN} 条`:'代理池为空';
     const savedUsePool = localStorage.getItem('outlook_use_proxy_pool');
     if($('useProxyPool')) $('useProxyPool').checked = savedUsePool==='0' ? false : true;
@@ -1122,9 +1142,9 @@ function renderProgress(){
     else if(a.status==='失败')err++;
     else if(a.status==='进行中')run++;
     return `<tr><td>${a.index}</td><td><span class="st ${stMap[a.status]||'wait'}">${displayStatus(a.status)}</span></td>
-      <td class="mono">${a.email||'—'}</td>
-      <td>${a.password?copyIconBtn(a.password):'<span class="rec-none">—</span>'}</td>
-      <td>${a.refresh_token?copyIconBtn(a.refresh_token):'<span class="rec-none">—</span>'}</td>
+      <td class="mono">${a.email||'暂无'}</td>
+      <td>${a.password?copyIconBtn(a.password):'<span class="rec-none">暂无</span>'}</td>
+      <td>${a.refresh_token?copyIconBtn(a.refresh_token):'<span class="rec-none">暂无</span>'}</td>
       <td style="color:var(--danger);font-size:11px;">${escHtml(a.error||'')}</td></tr>`;
   }).join('');
   $('nTotal').textContent=rows.length; $('nOk').textContent=ok; $('nErr').textContent=err;
@@ -1153,7 +1173,7 @@ async function copyRegisterLogs(){
 function renderSummary(s){
   if(!s){ $('batchSummary').className='msgbox'; $('batchSummary').innerHTML=''; return; }
   const st=s.avg_stage_timings||{};
-  const stages=Object.entries(st).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="badge neutral">${k} ${v}s</span>`).join(' ')||'—';
+  const stages=Object.entries(st).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="badge neutral">${k} ${v}s</span>`).join(' ')||'暂无';
   $('batchSummary').className='msgbox show ok';
   $('batchSummary').innerHTML=`<b>本批小结</b>　成功 ${s.ok}/${s.total}（失败 ${s.failed}）　本批耗时 <b>${s.elapsed}s</b>　单号均耗 <b>${s.avg_per_account}s</b><br><span style="color:var(--fg-3)">阶段平均：</span>${stages}`;
 }
@@ -1199,11 +1219,11 @@ function connectSSE(id){
 }
 
 function renderPool(){
-  const rows=filteredAccounts();
-  const pages=Math.max(1,Math.ceil(rows.length/PAGE_SIZE));
+  // 账号行已由服务端分页返回，这里只管渲染当前这一页，不再本地二次分页/过滤。
+  const pages=Math.max(1,Math.ceil(TOTAL_FILTERED/PAGE_SIZE));
   if(PAGE>pages) PAGE=pages;
-  const slice=rows.slice((PAGE-1)*PAGE_SIZE, PAGE*PAGE_SIZE);
-  $('navPoolCount').textContent=ACCOUNTS.length;
+  const slice=ACCOUNTS;
+  $('navPoolCount').textContent=TOTAL_POOL;
   if(!slice.length){ $('poolBody').innerHTML='<tr><td colspan="12" class="empty">无匹配账号</td></tr>'; }
   else $('poolBody').innerHTML=slice.map(a=>{
     const em=escHtml(a.email);
@@ -1219,19 +1239,19 @@ function renderPool(){
       <td>${cellPassword(a.email,a.password)}</td>
       <td>${rec}</td>
       <td>${tokenStatusMain(a)}</td>
-      <td>${batch?`<span class="cell-batch" title="批次 ${escHtml(batch)}${a.batch_id?(' · '+escHtml(a.batch_id)):''}">${escHtml(batch)}</span>`:'<span class="rec-none">—</span>'}</td>
+      <td>${batch?`<span class="cell-batch" title="批次 ${escHtml(batch)}${a.batch_id?(' · '+escHtml(a.batch_id)):''}">${escHtml(batch)}</span>`:'<span class="rec-none">暂无</span>'}</td>
       <td class="cell-time" title="${escHtml(fmtFullTime(a.created_at))}">${escHtml(fmtShortTime(a.created_at))}</td>
       <td class="cell-age" title="${escHtml(survivalTip(a))}">${escHtml(fmtSurvivalAge(a))}</td>
       <td class="cell-relogin mono" title="${escHtml(rescueTip(a))}">${escHtml(fmtRescueCount(a))}</td>
       <td class="cell-time" title="${escHtml(fmtFullTime(a.updated_at))}">${escHtml(fmtShortTime(a.updated_at))}</td>
-      <td style="font-size:11.5px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(a.note||'')}">${note}${tags||'<span class="rec-none">—</span>'}</td>
+      <td style="font-size:11.5px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(a.note||'')}">${note}${tags||'<span class="rec-none">暂无</span>'}</td>
       <td><div class="act-row">
         <button type="button" class="icon-btn is-info" title="详情" data-act="detail" data-email="${em}">${ICO_INFO}</button>
         <button type="button" class="icon-btn is-query" title="测活" data-act="verify" data-email="${em}">${ICO_REFRESH}</button>
       </div></td></tr>`;
   }).join('');
   document.querySelectorAll('.rowck').forEach(c=>c.onchange=()=>{ c.checked?SELECTED.add(c.dataset.email):SELECTED.delete(c.dataset.email); updateSel(); });
-  $('pageInfo').textContent=`第 ${PAGE}/${pages} 页 · 共 ${rows.length} 条`;
+  $('pageInfo').textContent=`第 ${PAGE}/${pages} 页 · 共 ${TOTAL_FILTERED} 条`;
   updateSel();
 }
 $('poolBody').addEventListener('click',(e)=>{
@@ -1252,59 +1272,48 @@ $('detailBody').addEventListener('click',(e)=>{
   const btn=e.target.closest('[data-act="copy-store"]');
   if(btn) copy(_detailCopyStore[btn.dataset.copyKey]||'');
 });
-$('detailCopy4').onclick=()=>{ const a=accountByEmail(DETAIL_EMAIL); if(a&&a.combo) copy(a.combo); };
+$('detailCopy4').onclick=()=>{ if(DETAIL_ACCOUNT&&DETAIL_ACCOUNT.combo) copy(DETAIL_ACCOUNT.combo); };
 $('detailNote').onclick=()=>{ if(DETAIL_EMAIL) editNote(DETAIL_EMAIL); };
-$('detailCopy6').onclick=()=>{ const a=accountByEmail(DETAIL_EMAIL); const c=combo6(a||{}); if(c) copy(c); else toast('没有六段格式可复制'); };
+$('detailCopy6').onclick=()=>{ const c=combo6(DETAIL_ACCOUNT||{}); if(c) copy(c); else toast('没有六段格式可复制'); };
 $('detailVerify').onclick=()=>{ if(DETAIL_EMAIL){ verifyRow(DETAIL_EMAIL).then(()=>showAccountDetail(DETAIL_EMAIL)); } };
 $('detailDelete').onclick=()=>{ if(DETAIL_EMAIL){ delRow(DETAIL_EMAIL); $('detailModal').classList.remove('show'); } };
-function isGraphReadable(a){
-  const v=a&&a.verify;
-  return !!(v && (v.ok || v.graph));
-}
-function accountBatchLabel(a){
-  return (a && (a.batch_label || (a.batch_no ? ('B'+a.batch_no) : ''))) || '';
-}
 function renderBatchFilter(){
   const sel=$('filterBatch'); if(!sel) return;
   const cur=FILTER.batch||'all';
-  const counts=new Map();
-  ACCOUNTS.forEach(a=>{ const l=accountBatchLabel(a); if(l) counts.set(l,(counts.get(l)||0)+1); });
-  const extras=[...counts.entries()].sort((x,y)=>String(y[0]).localeCompare(String(x[0]),'zh'));
-  const opts=[['all','全部批次'],['none','无批次'],...extras.map(([l,n])=>[l, `${l}（${n}）`])];
+  const opts=[['all','全部批次'],['none','无批次'],...BATCH_OPTIONS.map(b=>[b.label, `${b.label}（${b.count}）`])];
   sel.innerHTML=opts.map(([v,t])=>`<option value="${escHtml(v)}">${escHtml(t)}</option>`).join('');
   sel.value=opts.some(o=>o[0]===cur)?cur:'all';
   FILTER.batch=sel.value;
 }
-function filteredAccounts(){
-  return ACCOUNTS.filter(a=>{
-    const v=a.verify;
-    const view=FILTER.view;
-    if(view==='without' && a.has_token) return false;
-    if(view==='dual' && !a.login_token) return false;
-    if(view==='untested' && v) return false;
-    if(view==='usable' && !isGraphReadable(a)) return false;
-    if(view==='dead' && !(v&&!v.ok&&!v.graph)) return false;
-    const batch=accountBatchLabel(a);
-    if(FILTER.batch==='none' && batch) return false;
-    if(FILTER.batch && FILTER.batch!=='all' && FILTER.batch!=='none' && batch!==FILTER.batch) return false;
-    if(FILTER.q){ const q=FILTER.q.toLowerCase();
-      const hay=(a.email+' '+(a.recovery_email||'')+' '+(a.note||'')+' '+(a.tags||[]).join(' ')+' '+batch).toLowerCase();
-      if(!hay.includes(q)) return false; }
-    return true;
-  }).sort((a,b)=>{
-    const ga=isGraphReadable(a)?1:0, gb=isGraphReadable(b)?1:0;
-    if(ga!==gb) return gb-ga;
-    return String(b.created_at||'').localeCompare(String(a.created_at||''));
-  });
-}
 function updateSel(){ $('selCount').innerHTML='已选 <b>'+SELECTED.size+'</b>';
-  const vis=filteredAccounts().slice((PAGE-1)*PAGE_SIZE,PAGE*PAGE_SIZE);
+  const vis=ACCOUNTS;
   const all=vis.length&&vis.every(a=>SELECTED.has(a.email)); $('ckAll').checked=all; }
+let _acctReqSeq = 0;
+let _acctSearchTimer = null;
 async function loadAccounts(){
+  const reqId = ++_acctReqSeq;
+  const params = new URLSearchParams({
+    limit: PAGE_SIZE,
+    offset: (PAGE-1)*PAGE_SIZE,
+    q: FILTER.q || '',
+    batch: FILTER.batch || 'all',
+    view: FILTER.view || 'all',
+  });
   try {
-    const j=await (await api('/api/accounts')).json();
-    ACCOUNTS=j.accounts; renderStats(j.stats); renderBatchFilter(); renderPool();
+    const j = await (await api('/api/accounts?'+params.toString())).json();
+    if(reqId !== _acctReqSeq) return; // 已有更新的请求发出，这份过期响应作废（防抖/翻页竞态）
+    ACCOUNTS = j.accounts || [];
+    TOTAL_FILTERED = j.total || 0;
+    TOTAL_POOL = (j.stats && j.stats.total) || 0;
+    BATCH_OPTIONS = (j.stats && j.stats.batches) || [];
+    renderStats(j.stats);
+    renderBatchFilter();
+    renderPool();
   } catch(e){ $('poolBody').innerHTML='<tr><td colspan="12" class="empty">加载失败: '+e+'</td></tr>'; }
+}
+function loadAccountsDebounced(){
+  clearTimeout(_acctSearchTimer);
+  _acctSearchTimer = setTimeout(loadAccounts, 350);
 }
 
 function selectedEmails(){ return [...SELECTED]; }
@@ -1315,30 +1324,25 @@ function rescueLog(level, msg){
   c.appendChild(d); c.scrollTop=c.scrollHeight;
 }
 async function runBatchRescue(emails){
-  const picked=(emails&&emails.length)?ACCOUNTS.filter(a=>emails.includes(a.email)):ACCOUNTS.slice();
-  const list=picked.filter(a=>(a.password||'').trim());
-  const noPwd=picked.length-list.length;
+  // emails 为空 = 「全部账号」：不再靠本地 ACCOUNTS（只有当前页）预筛，交给服务端
+  // 按有密码过滤，避免为了拿到全量账号列表而把大账号池整表搬进浏览器。
+  const list = (emails && emails.length) ? emails.slice() : null;
   $('rescueConsole').innerHTML='';
-  $('rescueModalSub').textContent=`共 ${list.length} 个`;
+  $('rescueModalSub').textContent = list ? `共 ${list.length} 个` : '全部账号';
   $('rescueModal').classList.add('show');
   $('btnRescueSel').disabled=true;
-  if(!list.length){
-    rescueLog('WARNING','没有可重登账号（需有密码）');
-    $('btnRescueSel').disabled=false;
-    return;
-  }
   const proxy=($('proxy')&&$('proxy').value.trim())||'';
   const usePool=$('useProxyPool')&&$('useProxyPool').checked;
   if(!usePool&&!proxy) rescueLog('WARNING','未启用代理池且未填备用代理，将使用默认代理');
-  if(noPwd) rescueLog('WARNING', `${noPwd} 个缺密码，已跳过`);
-  rescueLog('INFO', `开始重登 ${list.length} 个（${usePool?'代理池':'单代理'}，并发 1）`);
+  rescueLog('INFO', `开始重登${list?` ${list.length} 个`:'全部账号'}（${usePool?'代理池':'单代理'}，并发 1）`);
   try {
-    const j=await jpost('/api/rescue',{emails:list.map(a=>a.email), proxy, use_proxy_pool:usePool, concurrency:1});
+    const j=await jpost('/api/rescue',{emails:list, proxy, use_proxy_pool:usePool, concurrency:1});
     if(!j.implemented){
       rescueLog('ERROR', j.message||'重登不可用');
       toast(j.message||'重登不可用');
       return;
     }
+    if(!(j.results||[]).length) rescueLog('WARNING', j.message||'没有可重登账号（需有密码）');
     (j.results||[]).forEach((r,i)=>{
       const tag=`[${i+1}/${(j.results||[]).length}] ${r.email}`;
       if(r.ok) rescueLog('INFO', `${tag} 成功${r.rescue_count!=null?' · 累计 '+r.rescue_count+' 次':''}${r.verify_summary?' · '+r.verify_summary:''}`);
@@ -1361,75 +1365,44 @@ function verifyLog(level, msg){
   d.innerHTML=`<span class="ts">${new Date().toTimeString().slice(0,8)}</span>${escHtml(msg||'')}`;
   c.appendChild(d); c.scrollTop=c.scrollHeight;
 }
-async function verifyOneAccount(a){
-  if(!a) return {ok:false,summary:'账号不存在'};
-  const rt=a.refresh_token||'';
-  if(!rt){
-    return {ok:false,email:a.email,summary:'缺少读信令牌，无法测活',unable:true};
-  }
-  // 测活默认直连：refresh 换票不需要注册代理；注册页 #proxy 多为住宅 IP，易导致 login.microsoftonline.com SSL 断连
-  const proxy=($('verProxy')&&$('verProxy').value.trim())||'';
-  return jpost('/api/verify-combo',{
-    email:a.email, refresh_token:rt, combo:a.combo||'', test_imap:false, proxy
-  });
-}
 async function verifyRow(email){
-  const a=accountByEmail(email); if(!a) return;
-  const j=await verifyOneAccount(a);
-  toast(j.transient?(j.summary||'网络异常，保留原状态'):(j.summary||(j.ok?'可读信':'不可用')));
+  // 列表行不带 refresh_token，测活交给 /api/verify-batch：服务端按邮箱查自己的令牌。
+  const j=await jpost('/api/verify-batch',{emails:[email], test_imap:false, concurrency:1});
+  const r=(j.results||[])[0]||{ok:false, summary:j.message||'校验失败'};
+  toast(r.transient?(r.summary||'网络异常，保留原状态'):(r.summary||(r.ok?'可读信':'不可用')));
   await loadAccounts();
-  return j;
+  return r;
 }
 async function runBatchVerify(emails){
-  const picked=(emails&&emails.length)
-    ? ACCOUNTS.filter(a=>emails.includes(a.email))
-    : ACCOUNTS.slice();
-  const list=picked.filter(a=>a.refresh_token).sort((a,b)=>{
-    const ga=isGraphReadable(a)?1:0, gb=isGraphReadable(b)?1:0;
-    if(ga!==gb) return gb-ga;
-    return 0;
-  });
-  const noToken=picked.length-list.length;
+  const list = (emails && emails.length) ? emails.slice() : null;
   $('verifyConsole').innerHTML='';
-  $('verifyModalSub').textContent=`共 ${list.length} 个`;
+  $('verifyModalSub').textContent = list ? `共 ${list.length} 个` : '全部账号';
   $('verifyModal').classList.add('show');
   $('btnVerifySel').disabled=true;
-  let ok=0, fail=0, died=0, skipped=0, i=0;
-  verifyLog('INFO', `开始测活 ${list.length} 个（默认直连）`);
-  if(noToken) verifyLog('WARNING', `${noToken} 个没有读信令牌，已跳过`);
-  const queue=list.slice();
-  const workers=Array.from({length:Math.min(3,queue.length||1)}, async()=>{
-    while(queue.length){
-      const a=queue.shift();
-      const n=++i;
-      const wasOk=isGraphReadable(a);
-      verifyLog('INFO', `[${n}/${list.length}] ${a.email}${wasOk?'（复查）':''} …`);
-      try {
-        const j=await verifyOneAccount(a);
-        if(j.transient){
-          skipped++;
-          verifyLog('WARNING', `[${n}] ${a.email} ${j.summary||'网络异常，保留原状态'}`);
-        }
-        else if(j.unable){ fail++; verifyLog('WARNING', `[${n}] ${a.email} ${j.summary}`); }
-        else if(j.ok){ ok++; verifyLog('INFO', `[${n}] ${a.email} 可读信`); }
-        else {
-          fail++;
-          if(wasOk) died++;
-          verifyLog('ERROR', `[${n}] ${a.email}${wasOk?' 已失活':' '} ${j.summary||j.message||'不可用'}`);
-        }
-      } catch(e){
-        fail++; verifyLog('ERROR', `[${n}] ${a.email} ${e.message||e}`);
-      }
-    }
-  });
-  await Promise.all(workers);
-  const extra=died?` · 原可读信现已死 ${died}`:'';
-  const skipTxt=skipped?` · 网络跳过 ${skipped}`:'';
-  verifyLog('INFO', `结束：可用 ${ok} · 失败 ${fail}${extra}${skipTxt}`);
-  $('verifyModalSub').textContent=`可用 ${ok} / ${list.length}${skipped?` · 跳过 ${skipped}`:''}`;
-  $('btnVerifySel').disabled=false;
-  await loadAccounts();
-  toast(`测活完成：可用 ${ok}，失败 ${fail}${died?'，新死 '+died:''}${skipped?'，网络跳过 '+skipped:''}`);
+  verifyLog('INFO', `开始测活${list?` ${list.length} 个`:'全部账号'}（默认直连，服务端并发）`);
+  try {
+    const j=await jpost('/api/verify-batch',{emails:list, test_imap:false, concurrency:4});
+    const results=j.results||[];
+    let ok=0, fail=0, skipped=0;
+    results.forEach((r,i)=>{
+      const tag=`[${i+1}/${results.length}] ${r.email||''}`;
+      if(r.skipped){ skipped++; verifyLog('WARNING', `${tag} ${r.summary||r.message||'孵化期中，暂不测活'}`); }
+      else if(r.transient){ skipped++; verifyLog('WARNING', `${tag} ${r.summary||'网络异常，保留原状态'}`); }
+      else if(r.unable){ fail++; verifyLog('WARNING', `${tag} ${r.summary||''}`); }
+      else if(r.ok){ ok++; verifyLog('INFO', `${tag} 可读信`); }
+      else { fail++; verifyLog('ERROR', `${tag} ${r.summary||r.message||'不可用'}`); }
+    });
+    if(!results.length) verifyLog('WARNING', j.message||'无可校验账号（缺少读信令牌）。');
+    verifyLog('INFO', `结束：可用 ${ok} · 失败 ${fail}${skipped?` · 跳过 ${skipped}`:''}`);
+    $('verifyModalSub').textContent=`可用 ${ok} / ${results.length}${skipped?` · 跳过 ${skipped}`:''}`;
+    toast(`测活完成：可用 ${ok}，失败 ${fail}${skipped?'，跳过 '+skipped:''}`);
+  } catch(e){
+    verifyLog('ERROR', String(e.message||e));
+    toast('测活失败');
+  } finally {
+    $('btnVerifySel').disabled=false;
+    await loadAccounts();
+  }
 }
 async function delRow(email){
   const j=await jpost('/api/accounts/delete',{emails:[email]});
@@ -1439,27 +1412,27 @@ async function delRow(email){
 }
 let NOTE_EMAIL='';
 async function editNote(email){
-  const a=accountByEmail(email)||{};
+  const a=(DETAIL_EMAIL===email&&DETAIL_ACCOUNT) ? DETAIL_ACCOUNT : (accountByEmail(email)||{});
   NOTE_EMAIL=email;
   $('noteInput').value=a.note||'';
   $('noteTags').value=(a.tags||[]).join(',');
   $('noteModal').classList.add('show');
 }
 
-$('ckAll').onchange=(e)=>{ const vis=filteredAccounts().slice((PAGE-1)*PAGE_SIZE,PAGE*PAGE_SIZE);
+$('ckAll').onchange=(e)=>{ const vis=ACCOUNTS;
   vis.forEach(a=>{ e.target.checked?SELECTED.add(a.email):SELECTED.delete(a.email); }); renderPool(); };
-$('poolSearch').oninput=(e)=>{ FILTER.q=e.target.value; PAGE=1; renderPool(); };
-$('filterView').onchange=(e)=>{ FILTER.view=e.target.value; PAGE=1; renderPool(); };
-$('filterBatch').onchange=(e)=>{ FILTER.batch=e.target.value; PAGE=1; renderPool(); };
+$('poolSearch').oninput=(e)=>{ FILTER.q=e.target.value; PAGE=1; loadAccountsDebounced(); };
+$('filterView').onchange=(e)=>{ FILTER.view=e.target.value; PAGE=1; loadAccounts(); };
+$('filterBatch').onchange=(e)=>{ FILTER.batch=e.target.value; PAGE=1; loadAccounts(); };
 $('jobsBody').addEventListener('click',(e)=>{
   const tr=e.target.closest('tr[data-batch]'); if(!tr) return;
   FILTER.batch=tr.dataset.batch||'all'; PAGE=1;
   const nav=document.querySelector('.nav[data-sec="pool"]');
   if(nav) nav.click();
-  renderBatchFilter(); renderPool();
+  loadAccounts();
 });
-$('prevPage').onclick=()=>{ if(PAGE>1){PAGE--; renderPool();} };
-$('nextPage').onclick=()=>{ PAGE++; renderPool(); };
+$('prevPage').onclick=()=>{ if(PAGE>1){PAGE--; loadAccounts();} };
+$('nextPage').onclick=()=>{ const pages=Math.max(1,Math.ceil(TOTAL_FILTERED/PAGE_SIZE)); if(PAGE<pages){PAGE++; loadAccounts();} };
 
 $('btnExport').onclick=async()=>{ await downloadExport(SELECTED.size?selectedEmails():null); };
 async function downloadExport(emails){
@@ -1483,9 +1456,13 @@ async function downloadExport(emails){
     toast(total?('已导出四段式（共 '+total+' 行）'):'无可导出账号');
   }
 }
-$('btnCopySel').onclick=()=>{ if(!SELECTED.size){toast('未选中账号');return;}
-  const lines=ACCOUNTS.filter(a=>SELECTED.has(a.email)).map(a=>a.combo).filter(Boolean);
-  copy(lines.join('\n')); };
+$('btnCopySel').onclick=async()=>{ if(!SELECTED.size){toast('未选中账号');return;}
+  // 列表行不带完整 combo，走导出接口按邮箱取四段式，不依赖本地（分页后只有当前页）的 ACCOUNTS。
+  const r=await fetch('/api/accounts/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({emails:selectedEmails(),format:'graph'})});
+  const text=(await r.text()).trim();
+  if(!text){ toast('无可复制内容'); return; }
+  copy(text);
+};
 $('btnVerifySel').onclick=()=>{ runBatchVerify(SELECTED.size?selectedEmails():null); };
 $('btnRescueSel').onclick=()=>{ runBatchRescue(SELECTED.size?selectedEmails():null); };
 $('verifyModalClose').onclick=()=>$('verifyModal').classList.remove('show');
@@ -1528,7 +1505,7 @@ $('qoderjiImportDo').onclick=async()=>{
 };
 
 function setStBadge(el,label,state,status){ const cls=state===true?'ok':(state===false?'err':'wait');
-  const suf=(status===undefined||status===null)?(state===true?'✓':(state===false?'✗':'—')):status;
+  const suf=(status===undefined||status===null)?(state===true?'通过':(state===false?'不通过':'暂无')):status;
   el.className='st '+cls; el.textContent=`${label}: ${suf}`; }
 async function verifyCombo(){
   const body={ combo:$('verCombo').value.trim()||null, email:$('verEmail').value.trim()||null,
@@ -1540,7 +1517,7 @@ async function verifyCombo(){
     const j=await jpost('/api/verify-combo',body);
     setStBadge($('vGraph'),'读信',j.graph?j.graph.ok:null,j.graph?j.graph.status:null);
     setStBadge($('vRest'),'备用接口',j.outlook_rest?j.outlook_rest.ok:null,j.outlook_rest?j.outlook_rest.status:null);
-    if(j.imap&&j.imap.tested) setStBadge($('vImap'),'IMAP',j.imap.ok,j.imap.ok?'OK':(j.imap.stage||'✗')); else setStBadge($('vImap'),'IMAP',null,'未测');
+    if(j.imap&&j.imap.tested) setStBadge($('vImap'),'IMAP',j.imap.ok,j.imap.ok?'OK':(j.imap.stage||'不通过')); else setStBadge($('vImap'),'IMAP',null,'未测');
     $('vSummary').className='msgbox show '+(j.ok?'ok':'err'); $('vSummary').textContent=j.summary||j.message||(j.ok?'可用':'不可用');
     let scope=j.granted_scope?('授权范围: '+j.granted_scope):'';
     if(j.refresh_error) scope+=(scope?' | ':'')+'令牌错误: '+j.refresh_error;
@@ -1567,10 +1544,10 @@ async function runKeepalive(emails){
     if(!(j.results||[]).length){ opsMsg('warn',j.message||'无可保活账号'); toast(j.message||'无可保活账号'); return; }
     const bd=(ok)=>ok?'<span class="badge success">是</span>':'<span class="badge danger">否</span>';
     $('kaBody').innerHTML=j.results.map(r=>`<tr>
-      <td class="mono">${r.email||'—'}</td>
+      <td class="mono">${r.email||'暂无'}</td>
       <td>${r.skip?'<span class="badge neutral">跳过</span>':bd(r.ok)}</td>
       <td>${bd(r.profile)}</td><td>${bd(r.message)}</td>
-      <td>${r.rotated?'<span class="badge brand">已轮换</span>':'<span style="color:var(--fg-4)">—</span>'}</td>
+      <td>${r.rotated?'<span class="badge brand">已轮换</span>':'<span style="color:var(--fg-4)">暂无</span>'}</td>
       <td style="font-size:11px;color:var(--fg-3)">${r.detail||''}</td></tr>`).join('');
     $('kaWrap').style.display='block';
     const done=`保活完成：存活 ${j.alive||0}/${j.total||0}，已更新 ${j.rotated||0}`;
@@ -1620,20 +1597,20 @@ function renderProxyAnalytics(a){
     const fallback=(a&&a.by_provider_country)||[];
     if(!fallback.length){ el.innerHTML='<tr><td colspan="7" class="empty">暂无统计数据（完成注册/重登后自动记录）</td></tr>'; return; }
     el.innerHTML=fallback.map(r=>`<tr>
-      <td>${escHtml(r.provider||'—')}</td>
-      <td>${escHtml(r.country||'—')}</td>
-      <td class="hint">—</td>
+      <td>${escHtml(r.provider||'暂无')}</td>
+      <td>${escHtml(r.country||'暂无')}</td>
+      <td class="hint">暂无</td>
       <td>${r.total||0}</td><td style="color:var(--success)">${r.success||0}</td><td style="color:var(--danger)">${r.fail||0}</td>
-      <td><b>${r.rate!=null?r.rate+'%':'—'}</b></td>
+      <td><b>${r.rate!=null?r.rate+'%':'暂无'}</b></td>
     </tr>`).join('');
     return;
   }
   el.innerHTML=rows.map(r=>`<tr>
-    <td>${escHtml(r.provider||'—')}</td>
-    <td>${escHtml(r.country||'—')}</td>
-    <td>${escHtml(r.reg_country||'—')}</td>
+    <td>${escHtml(r.provider||'暂无')}</td>
+    <td>${escHtml(r.country||'暂无')}</td>
+    <td>${escHtml(r.reg_country||'暂无')}</td>
     <td>${r.total||0}</td><td style="color:var(--success)">${r.success||0}</td><td style="color:var(--danger)">${r.fail||0}</td>
-    <td><b>${r.rate!=null?r.rate+'%':'—'}</b></td>
+    <td><b>${r.rate!=null?r.rate+'%':'暂无'}</b></td>
   </tr>`).join('');
 }
 function renderProxyAnalyticsStats(a, ts){
@@ -1642,7 +1619,7 @@ function renderProxyAnalyticsStats(a, ts){
   const ov=(ts&&ts.overall)||{};
   const items=[
     ['事件数', (a&&a.event_count)||0, 'var(--fg)'],
-    ['区间成功率', ov.rate!=null?ov.rate+'%':'—', 'var(--brand)'],
+    ['区间成功率', ov.rate!=null?ov.rate+'%':'暂无', 'var(--brand)'],
     ['成功', ov.success||0, 'var(--success)'],
     ['失败', ov.fail||0, 'var(--danger)'],
   ];
@@ -1693,7 +1670,7 @@ function showProxyChartTooltip(idx, clientX, clientY){
     const p=(ln.points||[])[idx]||{};
     if(!(p.total>0)) return;
     const col=chartColorForLine(ln,i);
-    const rate=p.rate!=null?`${p.rate}%`:'—';
+    const rate=p.rate!=null?`${p.rate}%`:'暂无';
     html+=`<div class="tt-row"><span class="tt-name"><span class="tt-dot" style="background:${col}"></span>${escHtml(ln.label)}</span><span class="tt-val">${rate} · ${p.success||0}/${p.total||0}</span></div>`;
   });
   html+=`<div class="tt-vol">当日总事件 ${day.total||0}（成功 ${day.success||0} / 失败 ${day.fail||0}）</div>`;
@@ -1856,15 +1833,15 @@ function renderProxyTable(){
   const en=p.enabled!==false;
     return `<tr data-id="${escHtml(p.id)}">
       <td><input type="checkbox" class="ck proxy-row-ck" data-id="${escHtml(p.id)}" ${chk}/></td>
-      <td>${escHtml(p.label||'—')}</td>
-      <td>${escHtml(p.provider||'—')}</td>
-      <td>${escHtml(p.country||'—')}</td>
-      <td class="mono" style="font-size:11px;">${escHtml(p.template_masked||'—')}</td>
+      <td>${escHtml(p.label||'暂无')}</td>
+      <td>${escHtml(p.provider||'暂无')}</td>
+      <td>${escHtml(p.country||'暂无')}</td>
+      <td class="mono" style="font-size:11px;">${escHtml(p.template_masked||'暂无')}</td>
       <td>${p.has_sid?'<span class="badge brand">是</span>':'<span class="badge neutral">否</span>'}</td>
       <td>${proxyStatusBadge(p.status)}</td>
-      <td class="mono" style="font-size:11px;">${escHtml(p.exit_ip||'—')}</td>
+      <td class="mono" style="font-size:11px;">${escHtml(p.exit_ip||'暂无')}</td>
       <td class="mono" style="font-size:11px;">${st.assigned||0}/${st.success||0}/${st.fail||0}</td>
-      <td class="cell-time" title="${escHtml(p.last_check_msg||'')}">${escHtml((p.last_check_at||'').replace('T',' ').slice(0,16)||'—')}</td>
+      <td class="cell-time" title="${escHtml(p.last_check_msg||'')}">${escHtml((p.last_check_at||'').replace('T',' ').slice(0,16)||'暂无')}</td>
       <td><input type="checkbox" class="proxy-en-toggle" data-id="${escHtml(p.id)}" ${en?'checked':''}/></td>
       <td><button type="button" class="btn sm proxy-check-one" data-id="${escHtml(p.id)}">预检</button></td>
     </tr>`;
@@ -1875,9 +1852,9 @@ function renderProxyBindings(rows){
   if(!rows||!rows.length){ $('proxyBindBody').innerHTML='<tr><td colspan="6" class="empty">暂无绑定</td></tr>'; return; }
   $('proxyBindBody').innerHTML=rows.map(b=>`<tr>
     <td class="mono">${escHtml(b.email)}</td>
-    <td>${escHtml(b.proxy_label||b.proxy_id||'—')}</td>
-    <td class="mono" style="font-size:11px;">${escHtml(b.resolved_masked||'—')}</td>
-    <td>${escHtml({register:'注册',rescue:'重登',manual:'手动'}[b.purpose]||b.purpose||'—')}</td>
+    <td>${escHtml(b.proxy_label||b.proxy_id||'暂无')}</td>
+    <td class="mono" style="font-size:11px;">${escHtml(b.resolved_masked||'暂无')}</td>
+    <td>${escHtml({register:'注册',rescue:'重登',manual:'手动'}[b.purpose]||b.purpose||'暂无')}</td>
     <td class="cell-time">${escHtml((b.assigned_at||'').replace('T',' ').slice(0,19))}</td>
     <td><button type="button" class="btn sm danger proxy-unbind" data-email="${escHtml(b.email)}">解绑</button></td>
   </tr>`).join('');
