@@ -186,10 +186,14 @@ def upsert(key: str, value: str) -> None:
     lines.append(f"{key}={value}")
 
 
-admin_key = (os.environ.get("ADMIN_KEY") or "").strip() or current("OUTLOOK_MAILBOX_API_ADMIN_KEY")
-generated = not admin_key
-if generated:
+admin_key = (os.environ.get("ADMIN_KEY") or "").strip()
+source = "来自 .deploy/local.env"
+if not admin_key:
+    admin_key = current("OUTLOOK_MAILBOX_API_ADMIN_KEY")
+    source = "沿用远端已有"
+if not admin_key:
     admin_key = "mbxadmin_" + secrets.token_urlsafe(32)
+    source = "本次新生成"
 
 if not lines:
     lines = ["# 由 scripts/deploy_to_38.sh 渲染。手工加的键会被保留，不要提交进 git。"]
@@ -201,7 +205,7 @@ if not current("OUTLOOK_MAILBOX_API_SESSION_HOURS"):
 
 path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 path.chmod(0o600)
-print("admin key: 新生成" if generated else "admin key: 沿用现有")
+print(f"admin key: {source}")
 PY
 "${SUDO[@]}" chown "${APP_USER}:${APP_USER}" "${ENV_FILE}"
 "${SUDO[@]}" chmod 600 "${ENV_FILE}"
