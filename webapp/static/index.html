@@ -3,29 +3,33 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Outlook 注册控制台</title>
+<title>信匣台</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/static/assets/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="/static/assets/favicon-192.png" />
+<link rel="apple-touch-icon" href="/static/assets/apple-touch-icon.png" />
 <style>
   :root {
-    --bg:#f7f8f8; --bg-elev:#fff; --bg-muted:#f4f4f5; --bg-sidebar:#fbfbfc;
-    --bg-hover:rgba(24,24,27,.045); --bg-active:rgba(5,150,105,.08);
-    --bg-card:#fff; --bg-pane:#f4f4f5;
-    --border:#e7e7ea; --border-strong:#d4d4d8; --border-subtle:#f0f0f2;
-    --fg:#18181b; --fg-2:#3f3f46; --fg-3:#71717a; --fg-4:#a1a1aa;
-    --brand:#059669; --brand-hover:#047857; --brand-fg:#fff;
-    --brand-soft:#ecfdf5; --brand-soft-2:#c7f0dd;
-    --brand-ring:rgba(5,150,105,.15);
+    --bg:#f5f4f1; --bg-elev:#fff; --bg-muted:#f0efe9; --bg-sidebar:#faf9f6;
+    --bg-hover:rgba(46,58,140,.05); --bg-active:rgba(46,58,140,.08);
+    --bg-card:#fff; --bg-pane:#f0efe9;
+    --border:#e4e2dc; --border-strong:#d4d1c8; --border-subtle:#eeece6;
+    --fg:#1a1a22; --fg-2:#3a3a48; --fg-3:#6b6b78; --fg-4:#9a9aa6;
+    --brand:#2E3A8C; --brand-hover:#243074; --brand-fg:#fff;
+    --brand-soft:#eef0f8; --brand-soft-2:#c8cce0;
+    --brand-ring:rgba(46,58,140,.16);
+    --accent:#C17F59;
     --success:#15803d; --success-bg:#ecfdf5; --success-border:#bbf7d0;
     --warn:#b45309; --warn-bg:#fffbeb; --warn-border:#fde68a;
     --danger:#b91c1c; --danger-bg:#fef2f2; --danger-border:#fecaca;
     --info:#1e40af; --info-bg:#eff6ff; --info-border:#bfdbfe;
-    --neutral-bg:#f4f4f5; --neutral-border:#e4e4e7;
-    --chip-bg:#f4f4f5;
-    --grid-line:rgba(16,24,40,.055);
+    --neutral-bg:#f0efe9; --neutral-border:#e4e2dc;
+    --chip-bg:#f0efe9;
+    --grid-line:rgba(46,58,140,.055);
     --r:8px; --r-sm:6px; --r-lg:12px; --sb-w:220px; --topbar-h:50px;
     --font-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-    --shadow-sm:0 1px 2px rgba(15,15,15,.04),0 1px 1px rgba(0,0,0,.03);
-    --shadow-md:0 4px 12px rgba(15,15,15,.06),0 1px 2px rgba(0,0,0,.04);
-    --shadow-lg:0 16px 40px rgba(15,23,42,.13),0 2px 6px rgba(15,23,42,.05);
+    --shadow-sm:0 1px 2px rgba(46,58,140,.04),0 1px 1px rgba(0,0,0,.03);
+    --shadow-md:0 4px 12px rgba(46,58,140,.07),0 1px 2px rgba(0,0,0,.04);
+    --shadow-lg:0 16px 40px rgba(46,58,140,.12),0 2px 6px rgba(26,26,34,.05);
     --ease-out:cubic-bezier(.22,1,.36,1);
     --ease-spring:cubic-bezier(.34,1.42,.5,1);
   }
@@ -47,12 +51,13 @@
   .sb { position:relative; background:var(--bg-sidebar); border-right:1px solid var(--border);
     display:flex; flex-direction:column; min-height:0; }
   .sb::after { content:''; position:absolute; inset:0; pointer-events:none; z-index:0;
-    background:radial-gradient(90% 34% at 0% 0%, rgba(5,150,105,.075), transparent 72%); }
+    background:
+      radial-gradient(90% 34% at 0% 0%, rgba(46,58,140,.09), transparent 72%),
+      radial-gradient(70% 28% at 100% 100%, rgba(193,127,89,.07), transparent 70%); }
   .sb > * { position:relative; z-index:1; }
   .sb-brand { display:flex; align-items:center; gap:10px; padding:16px; }
-  .sb-logo { width:30px; height:30px; border-radius:9px; background:linear-gradient(140deg,#34d399,#059669);
-    color:#fff; display:grid; place-items:center; font-weight:700; font-size:12.5px; letter-spacing:.04em;
-    box-shadow:0 2px 6px rgba(5,150,105,.28), inset 0 1px 0 rgba(255,255,255,.35); }
+  .sb-logo { width:30px; height:30px; border-radius:9px; object-fit:cover; display:block;
+    box-shadow:0 2px 8px rgba(46,58,140,.22); }
   .sb-name { font-weight:650; font-size:14.5px; line-height:1.1; letter-spacing:-.01em; }
   .sb-group { padding:8px; }
   .sb-title { font-size:10.5px; font-weight:600; letter-spacing:.6px; color:var(--fg-4); padding:8px 11px 6px; }
@@ -103,9 +108,10 @@
     mask-image:radial-gradient(150% 130% at 8% -10%, #000 0%, rgba(0,0,0,.55) 62%, rgba(0,0,0,.14) 100%); }
   .content::after { content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
     background-image:
-      radial-gradient(70% 44% at 4% 0%, rgba(5,150,105,.055), transparent 72%),
-      repeating-linear-gradient(45deg, rgba(24,24,27,.022) 0 1px, transparent 1px 3px),
-      repeating-linear-gradient(-45deg, rgba(24,24,27,.018) 0 1px, transparent 1px 3px); }
+      radial-gradient(70% 44% at 4% 0%, rgba(46,58,140,.07), transparent 72%),
+      radial-gradient(50% 36% at 96% 8%, rgba(193,127,89,.06), transparent 70%),
+      repeating-linear-gradient(45deg, rgba(46,58,140,.02) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(-45deg, rgba(193,127,89,.016) 0 1px, transparent 1px 3px); }
 
   .section { position:relative; z-index:1; display:none; flex:1; min-height:0; overflow:auto; }
   .section.active { display:block; animation:secIn .36s var(--ease-out) both; }
@@ -121,7 +127,7 @@
   .btn:active:not(:disabled), .pool-btn:active:not(:disabled) { transform:translateY(1px); }
   .btn:disabled, .pool-btn:disabled { opacity:.5; cursor:not-allowed; }
   .btn.primary, .pool-btn-primary { background:var(--brand); color:#fff; border-color:var(--brand); font-weight:600;
-    box-shadow:0 1px 2px rgba(5,150,105,.3), inset 0 1px 0 rgba(255,255,255,.16); }
+    box-shadow:0 1px 2px rgba(46,58,140,.28), inset 0 1px 0 rgba(255,255,255,.14); }
   .btn.primary:hover:not(:disabled), .pool-btn-primary:hover:not(:disabled) { background:var(--brand-hover); border-color:var(--brand-hover); color:#fff; }
   .btn.ghost { background:transparent; border-color:transparent; color:var(--fg-2); }
   .btn.ghost:hover { background:var(--bg-hover); color:var(--fg); border-color:transparent; }
@@ -155,7 +161,7 @@
   .stat { position:relative; overflow:hidden; padding:16px 18px;
     transition:transform .24s var(--ease-out), box-shadow .24s ease, border-color .24s ease; }
   .stat::before { content:''; position:absolute; left:0; right:0; bottom:0; height:2px;
-    background:linear-gradient(90deg, var(--brand), rgba(5,150,105,0));
+    background:linear-gradient(90deg, var(--brand), rgba(193,127,89,.35), rgba(46,58,140,0));
     transform:scaleX(0); transform-origin:left; transition:transform .42s var(--ease-out); }
   .stat:hover { transform:translateY(-2px); box-shadow:var(--shadow-md); border-color:var(--border-strong); }
   .stat:hover::before { transform:scaleX(1); }
@@ -494,8 +500,8 @@
 <div class="app">
   <aside class="sb">
     <div class="sb-brand">
-      <div class="sb-logo">OA</div>
-      <div class="sb-name">Outlook 控制台</div>
+      <img class="sb-logo" src="/static/assets/logo.png" alt="信匣台" width="30" height="30" />
+      <div class="sb-name">信匣台</div>
     </div>
     <div class="sb-group">
       <div class="sb-title">工作台</div>
@@ -1207,7 +1213,7 @@ const PROXY_SEL = new Set();
 let PROXY_ROWS = [];
 let PROXY_STATS_TS = null;
 const PROXY_CHART_HIDDEN = new Set();
-const CHART_PALETTE = ['#059669','#2563eb','#d97706','#dc2626','#7c3aed','#0891b2','#be185d','#65a30d','#ea580c','#4f46e5'];
+const CHART_PALETTE = ['#2E3A8C','#C17F59','#2563eb','#d97706','#dc2626','#7c3aed','#0891b2','#be185d','#65a30d','#4f46e5'];
 let PROXY_CHART_LAYOUT = null;
 
 // 侧栏活动项：一块背景 pill 用 transform 跟到当前按钮，避免逐项做背景切换的闪烁感。

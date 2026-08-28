@@ -31,8 +31,10 @@ debug_rescue_shots/
 *.png
 *.json.bak
 
-# 例外：保留 docs / webapp/static / README 截图
+# 例外：保留 docs / webapp/static 品牌图 / README 截图
 !webapp/static/index.html
+!webapp/static/assets/
+!webapp/static/assets/**
 !docs/
 !assets/screenshots/
 !assets/screenshots/**

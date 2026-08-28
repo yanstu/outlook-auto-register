@@ -42,12 +42,14 @@ from urllib.parse import quote
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import (
+    FileResponse,
     HTMLResponse,
     JSONResponse,
     PlainTextResponse,
     RedirectResponse,
     StreamingResponse,
 )
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 # 现有能力（只读 import 调用，不修改核心协议文件）
@@ -142,7 +144,7 @@ except Exception:  # noqa: BLE001
     register_batch_iter = None
     BATCH_READY = False
 
-app = FastAPI(title="Outlook API 注册控制台", version="2.0.0")
+app = FastAPI(title="信匣台", version="2.0.0")
 
 # Mailbox API v1：对外收信 / 取码 / 查字段。关掉它运维台照常工作。
 MAILBOX_API_ENABLED = mailbox_gateway.api_enabled()
@@ -164,10 +166,17 @@ if MAILBOX_API_ENABLED:
 CONSOLE_SESSION_COOKIE = "outlook_ops_session"
 CONSOLE_SESSION_MAX_AGE = 30 * 86400
 
-# 没有会话也能访问：登录页与它的接口、探活。
-_PUBLIC_PATHS = {"/favicon.ico", "/login.html", "/api/auth/login", "/api/auth/logout", "/api/health"}
-# Mailbox API 自带 Bearer 鉴权，整段放行给它自己把关
-_PUBLIC_PREFIXES = ("/api/v1/",)
+# 没有会话也能访问：登录页与它的接口、探活、品牌静态资源。
+_PUBLIC_PATHS = {
+    "/favicon.ico",
+    "/apple-touch-icon.png",
+    "/login.html",
+    "/api/auth/login",
+    "/api/auth/logout",
+    "/api/health",
+}
+# Mailbox API 自带 Bearer 鉴权；/static/ 放行以便登录页加载 logo / favicon
+_PUBLIC_PREFIXES = ("/api/v1/", "/static/")
 # 浏览器地址栏能打开的页面：未登录时跳登录页，而不是甩一段 401 文本
 _HTML_PATHS = {"/", "/index.html"}
 
@@ -1341,6 +1350,28 @@ def index() -> HTMLResponse:
 @app.get("/login.html", response_class=HTMLResponse)
 def login_page() -> HTMLResponse:
     return HTMLResponse(content=(STATIC_DIR / "login.html").read_text(encoding="utf-8"))
+
+
+@app.get("/favicon.ico")
+def favicon_ico() -> FileResponse:
+    return FileResponse(
+        STATIC_DIR / "assets" / "favicon-32.png",
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@app.get("/apple-touch-icon.png")
+def apple_touch_icon() -> FileResponse:
+    return FileResponse(
+        STATIC_DIR / "assets" / "apple-touch-icon.png",
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+# HTML 里的 /static/assets/* 由此提供；挂在路由之后以免盖住 /login.html 等显式路径
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 class LoginRequest(BaseModel):
