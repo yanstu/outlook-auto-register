@@ -12,6 +12,8 @@
 - 保活接 scripts.keepalive.keepalive_one（refresh→access→GET /me+列信→轮换回写）；
   「开启 IMAP」仍为占位，如实反馈，绝不假装成功。
 - 新号孵化期（OUTLOOK_INCUBATION_HOURS，默认 48h）内批量测活跳过，不打微软接口。
+- OUTLOOK_CONSOLE_PASSWORD 非空时全站要登录（cookie 会话 / X-Console-Password 头），
+  Mailbox API（/api/v1）不受它影响，仍只认自己的 Bearer mbx_sk。
 
 启动：
   cd outlook-api-register
@@ -19,11 +21,14 @@
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import os
 import queue
 import re
+import secrets
 import sys
 import threading
 import time
@@ -32,13 +37,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import quote
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import (
     HTMLResponse,
     JSONResponse,
     PlainTextResponse,
+    RedirectResponse,
     StreamingResponse,
 )
 from pydantic import BaseModel
@@ -141,6 +148,88 @@ MAILBOX_API_ENABLED = mailbox_gateway.api_enabled()
 if MAILBOX_API_ENABLED:
     app.include_router(mailbox_gateway.mailbox_router)
     mailbox_gateway.install_error_handlers(app)
+
+
+# ---------------------------------------------------------------------------
+# 运维台登录门（OUTLOOK_CONSOLE_PASSWORD）
+#
+# 运维台本身没有账号体系，一旦挂到公网域名上，任何人都能翻账号库。所以口令非空时
+# 由一层 HTTP middleware 在路由之前统一拦截：浏览器走 /login.html 种下的 httponly
+# 会话 cookie，curl/脚本走 X-Console-Password 头。
+#
+# Mailbox API（/api/v1）不受这道门管：它给其他项目调用，自带 Bearer mbx_sk 鉴权，
+# 再叠一层运维口令会让所有调用方都跑不通。
+# ---------------------------------------------------------------------------
+CONSOLE_SESSION_COOKIE = "outlook_ops_session"
+CONSOLE_SESSION_MAX_AGE = 30 * 86400
+
+# 没有会话也能访问：登录页与它的接口、探活。
+_PUBLIC_PATHS = {"/favicon.ico", "/login.html", "/api/auth/login", "/api/auth/logout", "/api/health"}
+# Mailbox API 自带 Bearer 鉴权，整段放行给它自己把关
+_PUBLIC_PREFIXES = ("/api/v1/",)
+# 浏览器地址栏能打开的页面：未登录时跳登录页，而不是甩一段 401 文本
+_HTML_PATHS = {"/", "/index.html"}
+
+
+def _console_password() -> str:
+    return (os.environ.get("OUTLOOK_CONSOLE_PASSWORD") or "").strip()
+
+
+def _console_session_token(password: str) -> str:
+    return hmac.new(password.encode("utf-8"), b"outlook-ops-v1", hashlib.sha256).hexdigest()
+
+
+def _console_cookie_valid(request: Request, password: str) -> bool:
+    supplied = (request.cookies.get(CONSOLE_SESSION_COOKIE) or "").strip()
+    if not supplied:
+        return False
+    return secrets.compare_digest(supplied, _console_session_token(password))
+
+
+def _console_header_authed(request: Request, password: str) -> bool:
+    supplied = (request.headers.get("x-console-password") or "").strip()
+    return bool(supplied) and secrets.compare_digest(supplied, password)
+
+
+def _set_console_cookie(resp: Response, password: str, request: Request) -> None:
+    resp.set_cookie(
+        key=CONSOLE_SESSION_COOKIE,
+        value=_console_session_token(password),
+        max_age=CONSOLE_SESSION_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=request.url.scheme == "https",
+        path="/",
+    )
+
+
+def _console_path_public(path: str) -> bool:
+    if path in _PUBLIC_PATHS or path.startswith(_PUBLIC_PREFIXES):
+        return True
+    # 路由前缀本身（无尾斜杠）也算 Mailbox API 的地盘
+    return path == "/api/v1"
+
+
+@app.middleware("http")
+async def _console_auth(request: Request, call_next):
+    password = _console_password()
+    path = request.url.path or ""
+    if not password or _console_path_public(path):
+        return await call_next(request)
+    header_authed = _console_header_authed(request, password)
+    if header_authed or _console_cookie_valid(request, password):
+        response = await call_next(request)
+        # 带对了口令头的浏览器顺手拿一枚会话，之后不必每次都带
+        if header_authed:
+            _set_console_cookie(response, password, request)
+        return response
+    msg = "需要登录，或口令已变更，请重新登录"
+    if path in _HTML_PATHS:
+        return RedirectResponse(url=f"/login.html?next={quote(path, safe='')}", status_code=302)
+    if path.startswith("/api/"):
+        return JSONResponse(status_code=401, content={"ok": False, "error": msg, "auth": True})
+    return PlainTextResponse(msg, status_code=401)
+
 
 _save_lock = threading.Lock()
 _meta_lock = threading.Lock()
@@ -1233,6 +1322,41 @@ def _startup_log() -> None:
 @app.get("/", response_class=HTMLResponse)
 def index() -> HTMLResponse:
     return HTMLResponse(content=(STATIC_DIR / "index.html").read_text(encoding="utf-8"))
+
+
+@app.get("/login.html", response_class=HTMLResponse)
+def login_page() -> HTMLResponse:
+    return HTMLResponse(content=(STATIC_DIR / "login.html").read_text(encoding="utf-8"))
+
+
+class LoginRequest(BaseModel):
+    password: str = ""
+
+
+@app.post("/api/auth/login")
+def auth_login(req: LoginRequest, request: Request) -> JSONResponse:
+    """口令正确就种下 middleware 每次都会校验的 httponly 会话 cookie。"""
+    password = _console_password()
+    if not password:
+        return JSONResponse({"ok": True, "auth_required": False})
+    if secrets.compare_digest((req.password or "").strip(), password):
+        resp = JSONResponse({"ok": True, "auth_required": True})
+        _set_console_cookie(resp, password, request)
+        return resp
+    return JSONResponse(status_code=401, content={"ok": False, "error": "口令错误"})
+
+
+@app.post("/api/auth/logout")
+def auth_logout() -> JSONResponse:
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(CONSOLE_SESSION_COOKIE, path="/")
+    return resp
+
+
+@app.get("/api/auth/check")
+def auth_check() -> JSONResponse:
+    """能走到这个路由，说明 middleware 已经认了请求里的 cookie 或口令头。"""
+    return JSONResponse({"ok": True, "auth_required": bool(_console_password())})
 
 
 @app.get("/api/config")
@@ -2435,6 +2559,8 @@ def health() -> JSONResponse:
             "dual_ready": DUAL_READY,
             "keepalive_ready": KEEPALIVE_READY,
             "rescue_ready": RESCUE_READY,
+            "mailbox_api": MAILBOX_API_ENABLED,
+            "auth_required": bool(_console_password()),
         }
     )
 

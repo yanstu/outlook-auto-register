@@ -814,6 +814,19 @@
 <div class="toast" id="toast"></div>
 
 <script>
+// 会话过期（或运维口令被改）后，接口会统一回 401。整页都靠这些请求取数，
+// 与其让页面停在一片空白上，不如直接回登录页，登录完再跳回来。
+(function guardSession(){
+  const origFetch = window.fetch.bind(window);
+  window.fetch = async (input, init) => {
+    const resp = await origFetch(input, init);
+    if (resp.status === 401 && location.pathname !== '/login.html') {
+      location.replace('/login.html?next=' + encodeURIComponent(location.pathname + location.search));
+    }
+    return resp;
+  };
+})();
+
 const $ = (id) => document.getElementById(id);
 let CFG = {};
 let ACCOUNTS = [];
