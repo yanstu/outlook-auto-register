@@ -2,12 +2,19 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from fastapi.testclient import TestClient
+
+ROOT = Path(__file__).resolve().parents[1]
+UNIT_TEMPLATE = ROOT / "deploy" / "outlook-console.user.service"
+DEPLOY_SCRIPT = ROOT / "scripts" / "deploy_to_38.sh"
+PASSWORD_PLACEHOLDER = "__OUTLOOK_CONSOLE_PASSWORD__"
 
 PASSWORD = "s3cr3t-console"
 ADMIN_KEY = "console-auth-admin-key"
@@ -198,6 +205,46 @@ class WhitespacePasswordTest(unittest.TestCase):
                 os.environ.pop("OUTLOOK_CONSOLE_PASSWORD", None)
             else:
                 os.environ["OUTLOOK_CONSOLE_PASSWORD"] = prev
+
+
+class DeployedPasswordIsLiteralTest(unittest.TestCase):
+    """部署链路必须把口令原样搬到 systemd 单元里，一个字符都不许变形。
+
+    线上那枚口令以标点结尾（真值只在 ``.deploy/local.env``），而它要穿过两层：
+    deploy_to_38.sh 的占位符替换，和 systemd 的 ``Environment=`` 解析。任何一层把
+    尾部的点号、引号或空白吃掉或加上，运维台就会变成一个谁都登不进去的空壳。
+    """
+
+    # 尾随点号、引号、空白、`$` —— 把 systemd 与 shell 各自的敏感字符凑齐
+    SAMPLES = ("sample1...", "a.b.c", "p@ss w0rd", "with'quote\"s", "tail$dollar")
+
+    def _render(self, password: str) -> str:
+        return UNIT_TEMPLATE.read_text(encoding="utf-8").replace(PASSWORD_PLACEHOLDER, password)
+
+    def test_template_and_script_agree_on_the_placeholder(self):
+        # 占位符在两边改名不同步的话，部署会把 "__OUTLOOK_CONSOLE_PASSWORD__"
+        # 这串字面量当成口令发上线，而且探活全绿、毫无察觉。
+        self.assertIn(PASSWORD_PLACEHOLDER, UNIT_TEMPLATE.read_text(encoding="utf-8"))
+        self.assertIn(PASSWORD_PLACEHOLDER, DEPLOY_SCRIPT.read_text(encoding="utf-8"))
+
+    def test_rendered_unit_carries_the_password_verbatim(self):
+        for password in self.SAMPLES:
+            with self.subTest(password=password):
+                rendered = self._render(password)
+                self.assertNotIn(PASSWORD_PLACEHOLDER, rendered)
+                line = re.search(
+                    r"^Environment=OUTLOOK_CONSOLE_PASSWORD=(.*)$", rendered, re.M
+                )
+                self.assertIsNotNone(line)
+                self.assertEqual(line.group(1), password)
+
+    def test_server_reads_back_a_punctuated_password(self):
+        from webapp import server
+
+        for password in self.SAMPLES:
+            with self.subTest(password=password):
+                with mock.patch.dict(os.environ, {"OUTLOOK_CONSOLE_PASSWORD": password}):
+                    self.assertEqual(server._console_password(), password)
 
 
 if __name__ == "__main__":
